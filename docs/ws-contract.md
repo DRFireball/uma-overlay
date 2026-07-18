@@ -51,6 +51,13 @@ characters. Do not reshape it in the hook; the app owns the mapping.
 ```
 
 ## Development without the game
-`tools/FakeHookSender` (to be added) connects to the server and replays fixture frames from
+`tools/FakeHookSender` connects to the server and replays fixture frames from
 `tests/fixtures/*.json`, so the entire app and all engines are developable and testable with the
-game closed.
+game closed:
+
+```bash
+dotnet run --project tools/FakeHookSender -- ws://127.0.0.1:8974/ tests/fixtures/career_turn.json
+```
+
+The server side is `UmaCompanion.Core.Live.LiveStateServer`; frames are parsed by
+`FrameParser.Parse` into the typed records in `Live/Frames.cs`.

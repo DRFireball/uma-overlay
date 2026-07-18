@@ -1,0 +1,14 @@
+{ "v": 1, "type": "career_turn", "payload": {
+    "turn": 24,
+    "stats": { "speed": 412, "stamina": 301, "power": 288, "guts": 190, "wiz": 240 },
+    "energy": 62, "mood": 4, "skill_points": 145, "fans": 12040,
+    "goal_race_id": 1001,
+    "training_options": [
+      { "facility": "speed", "level": 3,
+        "gains": { "speed": 24, "stamina": 0, "power": 8, "guts": 0, "wiz": 0, "skill_pts": 4 },
+        "fail_pct": 5,
+        "supports": [ { "support_card_id": 30028, "bond": 74, "hint": true } ] },
+      { "facility": "stamina", "level": 2,
+        "gains": { "speed": 0, "stamina": 21, "power": 0, "guts": 3, "wiz": 0, "skill_pts": 3 },
+        "fail_pct": 12,
+        "supports": [] } ] } }
