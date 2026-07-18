@@ -17,14 +17,14 @@ public class MasterDbCareerRacesTests
             CREATE TABLE race (id INTEGER PRIMARY KEY, grade INTEGER, course_set INTEGER);
             CREATE TABLE race_instance (id INTEGER PRIMARY KEY, race_id INTEGER);
             CREATE TABLE race_course_set (id INTEGER PRIMARY KEY, distance INTEGER, ground INTEGER);
-            CREATE TABLE single_mode_program (id INTEGER PRIMARY KEY, race_instance_id INTEGER, month INTEGER, half INTEGER, need_fan_count INTEGER);
+            CREATE TABLE single_mode_program (id INTEGER PRIMARY KEY, race_instance_id INTEGER, race_permission INTEGER, month INTEGER, half INTEGER, need_fan_count INTEGER);
             CREATE TABLE text_data (category INTEGER, "index" INTEGER, text TEXT);
 
-            -- Sprint turf G1 in early June; Long dirt G3 in late December.
+            -- Sprint turf G1 (Classic) in early June; Long dirt G3 (Senior) in late December.
             INSERT INTO race_course_set VALUES (9001, 1200, 1), (9002, 2500, 2);
             INSERT INTO race VALUES (1001, 100, 9001), (1002, 300, 9002);
             INSERT INTO race_instance VALUES (100101, 1001), (100201, 1002);
-            INSERT INTO single_mode_program VALUES (1, 100101, 6, 1, 12000), (2, 100201, 12, 2, 20000);
+            INSERT INTO single_mode_program VALUES (1, 100101, 2, 6, 1, 12000), (2, 100201, 3, 12, 2, 20000);
             INSERT INTO text_data VALUES (32, 1001, 'Yasuda Kinen'), (32, 1002, 'Long Dirt Test');
             """;
         cmd.ExecuteNonQuery();
@@ -45,6 +45,7 @@ public class MasterDbCareerRacesTests
         Assert.Equal(1001, sprint.RaceId);
         Assert.Equal("Yasuda Kinen", sprint.Name);
         Assert.Equal(RaceGrade.G1, sprint.Grade);
+        Assert.Equal(CareerYear.Classic, sprint.Year);
         Assert.Equal(6, sprint.Month);
         Assert.Equal(RaceHalf.Early, sprint.Half);
         Assert.Equal(1200, sprint.Distance);
@@ -54,6 +55,7 @@ public class MasterDbCareerRacesTests
 
         var longDirt = races[1];
         Assert.Equal(RaceGrade.G3, longDirt.Grade);
+        Assert.Equal(CareerYear.Senior, longDirt.Year);
         Assert.Equal(RaceHalf.Late, longDirt.Half);
         Assert.Equal(Surface.Dirt, longDirt.Surface);
         Assert.Equal(DistanceCategory.Long, longDirt.DistanceCategory);

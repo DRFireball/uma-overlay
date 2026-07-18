@@ -7,8 +7,24 @@ namespace UmaCompanion.Core.Tests;
 public class RaceSchedulerTests
 {
     private static CareerRace Race(int id, string name, RaceGrade grade, int month, RaceHalf half,
-        int distance, Surface surface, int fans = 10000)
-        => new(id, name, grade, month, half, distance, surface, CareerRace.CategoryFor(distance), fans);
+        int distance, Surface surface, int fans = 10000, CareerYear year = CareerYear.Senior)
+        => new(id, name, grade, year, month, half, distance, surface, CareerRace.CategoryFor(distance), fans);
+
+    [Fact]
+    public void G1MaxSchedule_SchedulesRecurringRaceOncePerCareerYear()
+    {
+        // Arima Kinen runs at the same calendar turn in both Classic and Senior years.
+        var calendar = new[]
+        {
+            Race(1023, "Arima Kinen", RaceGrade.G1, 12, RaceHalf.Late, 2500, Surface.Turf, year: CareerYear.Classic),
+            Race(1023, "Arima Kinen", RaceGrade.G1, 12, RaceHalf.Late, 2500, Surface.Turf, year: CareerYear.Senior),
+        };
+
+        var schedule = new RaceScheduler().G1MaxSchedule(calendar);
+
+        Assert.Equal(2, schedule.Count); // same calendar turn, two years → two scheduled races
+        Assert.Equal(new[] { CareerYear.Classic, CareerYear.Senior }, schedule.Select(s => s.Race.Year));
+    }
 
     [Fact]
     public void G1MaxSchedule_PicksBestGradePerSlot_AndExcludesScenarioFinales()
@@ -25,6 +41,36 @@ public class RaceSchedulerTests
 
         Assert.Equal(new[] { 3, 1 }, schedule.Select(s => s.Race.RaceId)); // ordered by turn: June then September
         Assert.DoesNotContain(schedule, s => s.Race.RaceId == 4);
+    }
+
+    [Fact]
+    public void MissingTrophySchedule_AmongTwoMissingRacesInOneSlot_PicksHigherGrade()
+    {
+        var calendar = new[]
+        {
+            Race(1, "Missing G3", RaceGrade.G3, 4, RaceHalf.Early, 2000, Surface.Turf),
+            Race(2, "Missing G1", RaceGrade.G1, 4, RaceHalf.Early, 2000, Surface.Turf), // same slot, both missing
+        };
+        var missing = new HashSet<int> { 1, 2 };
+
+        var schedule = new RaceScheduler().MissingTrophySchedule(calendar, missing);
+
+        var pick = Assert.Single(schedule);
+        Assert.Equal(2, pick.Race.RaceId); // G1 wins the slot
+    }
+
+    [Fact]
+    public void Schedules_AreEmpty_WhenNothingIsSchedulable()
+    {
+        var scheduler = new RaceScheduler();
+        var onlyFinales = new[]
+        {
+            Race(1, "URA Finale", RaceGrade.G1, 1, RaceHalf.Late, 2000, Surface.Turf, fans: 0),
+        };
+
+        Assert.Empty(scheduler.G1MaxSchedule(onlyFinales));
+        Assert.Empty(scheduler.G1MaxSchedule(Array.Empty<CareerRace>()));
+        Assert.Empty(scheduler.MissingTrophySchedule(onlyFinales, new HashSet<int> { 1 }));
     }
 
     [Fact]

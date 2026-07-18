@@ -93,18 +93,16 @@ public sealed class MasterDb : IDisposable
         return races;
     }
 
-    // As of the 2026-07 Global master.mdb, every race reachable via race_trophy has grade
-    // 100/200/300 (verified by query), so Ex is a forward-compat fallback, not a live bucket.
     /// <summary>
-    /// Every race on the career (single-mode) calendar, with grade, turn (month + half),
-    /// distance/surface, and fan requirement — the full input the race scheduler reasons over.
+    /// Every race on the career (single-mode) calendar, with grade, career year, turn
+    /// (month + half), distance/surface, and fan requirement — the input the scheduler reasons over.
     /// </summary>
     public IReadOnlyList<CareerRace> GetCareerRaces()
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            SELECT DISTINCT ri.race_id, r.grade, sp.month, sp.half, cs.distance, cs.ground,
-                   sp.need_fan_count, td.text
+            SELECT DISTINCT sp.race_permission, ri.race_id, r.grade, sp.month, sp.half,
+                   cs.distance, cs.ground, sp.need_fan_count, td.text
             FROM single_mode_program sp
             JOIN race_instance ri ON ri.id = sp.race_instance_id
             JOIN race r ON r.id = ri.race_id
@@ -115,25 +113,49 @@ public sealed class MasterDb : IDisposable
         cmd.Parameters.AddWithValue("$nameCat", RaceNameCategory);
 
         var races = new List<CareerRace>();
+        // A race can appear under both Senior permissions (3 and 4) for the same turn; collapse
+        // those to one entry per (year, race, turn).
+        var seen = new HashSet<(CareerYear, int, int, RaceHalf)>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            var raceId = reader.GetInt32(0);
-            var distance = reader.GetInt32(4);
+            var year = MapYear(reader.GetInt32(0));
+            var raceId = reader.GetInt32(1);
+            var month = reader.GetInt32(3);
+            var half = reader.GetInt32(4) == 1 ? RaceHalf.Early : RaceHalf.Late;
+            if (!seen.Add((year, raceId, month, half)))
+            {
+                continue;
+            }
+
+            var distance = reader.GetInt32(5);
             races.Add(new CareerRace(
                 RaceId: raceId,
-                Name: reader.IsDBNull(7) ? $"Race {raceId}" : reader.GetString(7),
-                Grade: MapGrade(reader.GetInt32(1)),
-                Month: reader.GetInt32(2),
-                Half: reader.GetInt32(3) <= 1 ? RaceHalf.Early : RaceHalf.Late,
+                Name: reader.IsDBNull(8) ? $"Race {raceId}" : reader.GetString(8),
+                Grade: MapGrade(reader.GetInt32(2)),
+                Year: year,
+                Month: month,
+                Half: half,
                 Distance: distance,
-                Surface: reader.GetInt32(5) == 1 ? Surface.Turf : Surface.Dirt,
+                Surface: reader.GetInt32(6) == 1 ? Surface.Turf : Surface.Dirt,
                 DistanceCategory: CareerRace.CategoryFor(distance),
-                NeedFanCount: reader.GetInt32(6)));
+                NeedFanCount: reader.GetInt32(7)));
         }
         return races;
     }
 
+    // single_mode_program.race_permission encodes the career year a race is offered in:
+    // 1 = Junior (months 7-12), 2 = Classic (full year), 3 and 4 = Senior (two program subsets
+    // that together cover the Senior year). Verified against the Global master.mdb.
+    private static CareerYear MapYear(int permission) => permission switch
+    {
+        1 => CareerYear.Junior,
+        2 => CareerYear.Classic,
+        _ => CareerYear.Senior,
+    };
+
+    // As of the 2026-07 Global master.mdb, every race reachable via race_trophy has grade
+    // 100/200/300 (verified by query), so Ex is a forward-compat fallback, not a live bucket.
     private static RaceGrade MapGrade(int grade) => grade switch
     {
         100 => RaceGrade.G1,

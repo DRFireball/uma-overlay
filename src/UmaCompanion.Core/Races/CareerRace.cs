@@ -14,6 +14,14 @@ public enum RaceHalf
     Late,
 }
 
+/// <summary>The three playable career years. A race can recur in more than one (e.g. Arima Kinen).</summary>
+public enum CareerYear
+{
+    Junior,
+    Classic,
+    Senior,
+}
+
 /// <summary>Aptitude distance buckets, matching the game's Sprint/Mile/Medium/Long grades.</summary>
 public enum DistanceCategory
 {
@@ -28,6 +36,7 @@ public sealed record CareerRace(
     int RaceId,
     string Name,
     RaceGrade Grade,
+    CareerYear Year,
     int Month,
     RaceHalf Half,
     int Distance,

@@ -44,5 +44,15 @@ public class MasterDbIntegrationTests
         Assert.Equal(2500, arima.Distance);
         Assert.Equal(Surface.Turf, arima.Surface);
         Assert.Equal(DistanceCategory.Long, arima.DistanceCategory);
+
+        // Arima Kinen recurs in Classic and Senior years (not Junior), each exactly once.
+        var arimaYears = races.Where(r => r.Name == "Arima Kinen").Select(r => r.Year).OrderBy(y => y).ToList();
+        Assert.Equal(new[] { CareerYear.Classic, CareerYear.Senior }, arimaYears);
+        // The Triple Crown is Classic-year only.
+        foreach (var tc in new[] { "Satsuki Sho", "Tokyo Yushun (Japanese Derby)", "Kikuka Sho" })
+        {
+            var years = races.Where(r => r.Name == tc).Select(r => r.Year).Distinct().ToList();
+            Assert.Equal(new[] { CareerYear.Classic }, years);
+        }
     }
 }

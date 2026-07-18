@@ -20,16 +20,21 @@ public class RaceSchedulerIntegrationTests
         var schedule = new RaceScheduler().G1MaxSchedule(calendar);
 
         Assert.NotEmpty(schedule);
-        // One race per (month, half) turn slot.
-        var slots = schedule.Select(s => (s.Race.Month, s.Race.Half)).ToList();
+        // One race per (career year, month, half) turn — years are not collapsed.
+        var slots = schedule.Select(s => (s.Race.Year, s.Race.Month, s.Race.Half)).ToList();
         Assert.Equal(slots.Count, slots.Distinct().Count());
         // Scenario finales (fans == 0) never scheduled.
         Assert.All(schedule, s => Assert.True(s.Race.NeedFanCount > 0));
-        // Arima Kinen (G1, Dec late) wins its slot.
-        Assert.Contains(schedule, s => s.Race.Name == "Arima Kinen" && s.Race.Grade == RaceGrade.G1);
-        // Ordered by turn.
+        // All three career years are represented (the pre-fix bug collapsed them to one).
+        Assert.Equal(3, schedule.Select(s => s.Race.Year).Distinct().Count());
+        // Three years of turns — well beyond the 24 total the collapsed-slot bug produced.
+        Assert.True(schedule.Count > 40, $"expected a full 3-year schedule, got {schedule.Count} turns");
+        // More G1s than the 17 the collapse produced (24 distinct G1-containing turns exist).
+        Assert.True(schedule.Count(s => s.Race.Grade == RaceGrade.G1) > 20,
+            $"expected >20 G1s scheduled, got {schedule.Count(s => s.Race.Grade == RaceGrade.G1)}");
+        // Ordered by turn (year, then month, then half).
         Assert.Equal(
-            schedule.OrderBy(s => s.Race.Month).ThenBy(s => s.Race.Half).Select(s => s.Race.RaceId),
-            schedule.Select(s => s.Race.RaceId));
+            schedule.OrderBy(s => s.Race.Year).ThenBy(s => s.Race.Month).ThenBy(s => s.Race.Half).Select(s => (s.Race.Year, s.Race.Month, s.Race.Half)),
+            schedule.Select(s => (s.Race.Year, s.Race.Month, s.Race.Half)));
     }
 }

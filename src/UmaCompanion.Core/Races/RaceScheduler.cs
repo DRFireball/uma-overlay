@@ -13,9 +13,10 @@ public sealed record ScheduledRace(CareerRace Race, double Score);
 public sealed class RaceScheduler
 {
     /// <summary>
-    /// Whether a calendar race is a real user-schedulable race. Excludes scenario-finale entries
-    /// (URA Finale / Twinkle Star Climax), which carry no fan requirement and auto-adapt to the
-    /// character's aptitude rather than being a schedulable choice.
+    /// Whether a calendar race is a real user-schedulable race. Excludes entries with no fan
+    /// requirement: the scenario finales (URA Finale / Twinkle Star Climax, which auto-adapt to
+    /// the character's aptitude) and the forced maiden / Make Debut races — none of which are a
+    /// schedulable choice.
     /// </summary>
     public static bool IsSchedulable(CareerRace race) => race.NeedFanCount > 0;
 
@@ -49,13 +50,15 @@ public sealed class RaceScheduler
             .Where(IsSchedulable)
             .Select(race => (race, score: score(race)))
             .Where(x => x.score is not null)
-            .GroupBy(x => (x.race.Month, x.race.Half))
+            // One race per turn: a turn is a (career year, month, half) — the same calendar month
+            // in different years is a different turn, so recurring races are kept in each year.
+            .GroupBy(x => (x.race.Year, x.race.Month, x.race.Half))
             .Select(slot => slot
                 .OrderByDescending(x => x.score!.Value)
                 .ThenBy(x => (int)x.race.Grade)   // tie-break: prefer the higher race grade
                 .ThenBy(x => x.race.RaceId)       // final tie-break: deterministic
                 .First())
-            .OrderBy(x => x.race.Month).ThenBy(x => x.race.Half)
+            .OrderBy(x => x.race.Year).ThenBy(x => x.race.Month).ThenBy(x => x.race.Half)
             .Select(x => new ScheduledRace(x.race, x.score!.Value))
             .ToList();
     }
