@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using UmaCompanion.Core.Races;
+using UmaCompanion.Core.Skills;
 using UmaCompanion.Core.Trophies;
 
 namespace UmaCompanion.Core.MasterData;
@@ -142,6 +143,40 @@ public sealed class MasterDb : IDisposable
                 NeedFanCount: reader.GetInt32(7)));
         }
         return races;
+    }
+
+    // text_data category holding skill names, keyed by skill id.
+    private const int SkillNameCategory = 47;
+
+    /// <summary>
+    /// Every skill that can be bought in a career run (i.e. has a skill-point cost), with its name,
+    /// rank/evaluation value, and cost. Returns skills raw, including debuffs (negative value); the
+    /// <see cref="SkillPurchaseRecommender"/> is responsible for filtering.
+    /// </summary>
+    public IReadOnlyList<PurchasableSkill> GetPurchasableSkills()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT sd.id, td.text, sd.grade_value, np.need_skill_point
+            FROM skill_data sd
+            JOIN single_mode_skill_need_point np ON np.id = sd.id
+            LEFT JOIN text_data td ON td.category = $nameCat AND td."index" = sd.id
+            ORDER BY sd.id
+            """;
+        cmd.Parameters.AddWithValue("$nameCat", SkillNameCategory);
+
+        var skills = new List<PurchasableSkill>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            var id = reader.GetInt32(0);
+            skills.Add(new PurchasableSkill(
+                SkillId: id,
+                Name: reader.IsDBNull(1) ? $"Skill {id}" : reader.GetString(1),
+                RankValue: reader.GetInt32(2),
+                SkillPointCost: reader.GetInt32(3)));
+        }
+        return skills;
     }
 
     // single_mode_program.race_permission encodes the career year a race is offered in:
