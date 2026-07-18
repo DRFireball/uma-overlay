@@ -61,7 +61,8 @@
 
         <!-- Footer -->
         <StackPanel Grid.Row="3" Margin="0,10,0,0">
-            <TextBlock Text="{Binding HookActivity}" Foreground="#FF9AA3B2" />
+            <TextBlock Text="{Binding CaptureStatus}" Foreground="#FF9AA3B2" />
+            <TextBlock Text="{Binding HookActivity}" Foreground="#FF9AA3B2" Margin="0,2,0,0" />
             <TextBlock Text="{Binding MasterDbPath}" Foreground="#FF6B7280" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
         </StackPanel>
     </Grid>

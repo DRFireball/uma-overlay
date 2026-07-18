@@ -3,9 +3,11 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Threading;
+using UmaCompanion.App.Reading;
 using UmaCompanion.Core.Live;
 using UmaCompanion.Core.MasterData;
 using UmaCompanion.Core.Races;
+using UmaCompanion.Core.Reading;
 using UmaCompanion.Core.Trophies;
 
 namespace UmaCompanion.App;
@@ -26,6 +28,7 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
     private MasterDb? _db;
     private TrophyPlanner? _planner;
     private LiveStateServer? _server;
+    private ScreenReaderService? _screenReader;
 
     public CompanionViewModel()
     {
@@ -54,6 +57,13 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _hookActivity;
         private set => Set(ref _hookActivity, value);
+    }
+
+    private string _captureStatus = "Screen reader starting…";
+    public string CaptureStatus
+    {
+        get => _captureStatus;
+        private set => Set(ref _captureStatus, value);
     }
 
     private int _missingCount;
@@ -98,6 +108,15 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
             _server = new LiveStateServer(ListenPort, OnFrame);
             _server.Start();
             Status = $"Listening on ws://localhost:{ListenPort} — waiting for the game hook.";
+
+            // The screen reader is just a second producer of the same frames the server ingests.
+            var raceNames = _db.GetCareerRaces().Select(r => (r.RaceId, r.Name))
+                .Concat(_db.GetTrophyRaces().Select(t => (t.RaceId, t.Name)));
+            _screenReader = new ScreenReaderService(
+                new RaceResultScreenInterpreter(new RaceNameMatcher(raceNames)),
+                OnFrame,
+                status => _dispatcher.InvokeAsync(() => CaptureStatus = status));
+            _screenReader.Start();
         }
         catch (Exception ex)
         {
@@ -153,6 +172,7 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
 
     public void Dispose()
     {
+        _screenReader?.Dispose();
         _server?.Dispose();
         _db?.Dispose();
     }
