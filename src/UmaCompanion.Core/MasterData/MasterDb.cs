@@ -5,19 +5,34 @@ namespace UmaCompanion.Core.MasterData;
 
 /// <summary>
 /// Read-only accessor over the game's <c>master.mdb</c> SQLite database.
-/// Callers own the connection lifetime; use <see cref="OpenReadOnlyCopy"/> for a real install.
+/// When constructed via <see cref="OpenReadOnlyCopy"/>, disposing closes the connection and
+/// deletes the temp snapshot; when constructed with an external connection, the caller owns it.
 /// </summary>
-public sealed class MasterDb
+public sealed class MasterDb : IDisposable
 {
     // text_data category holding full race names, keyed by race id.
     private const int RaceNameCategory = 32;
 
     private readonly SqliteConnection _connection;
+    private readonly bool _ownsConnection;
 
-    public MasterDb(SqliteConnection connection) => _connection = connection;
+    public MasterDb(SqliteConnection connection) : this(connection, ownsConnection: false, tempCopyPath: null)
+    {
+    }
+
+    private MasterDb(SqliteConnection connection, bool ownsConnection, string? tempCopyPath)
+    {
+        _connection = connection;
+        _ownsConnection = ownsConnection;
+        TempCopyPath = tempCopyPath;
+    }
+
+    /// <summary>Path of the temp snapshot backing this instance, or null for external connections.</summary>
+    public string? TempCopyPath { get; }
 
     /// <summary>
     /// Snapshot-copies the (possibly game-locked) master.mdb to a temp file and opens it read-only.
+    /// Dispose the returned instance to close the connection and delete the snapshot.
     /// </summary>
     public static MasterDb OpenReadOnlyCopy(string masterMdbPath)
     {
@@ -29,7 +44,23 @@ public sealed class MasterDb
             Mode = SqliteOpenMode.ReadOnly,
         }.ToString());
         conn.Open();
-        return new MasterDb(conn);
+        return new MasterDb(conn, ownsConnection: true, tempCopyPath: tempCopy);
+    }
+
+    public void Dispose()
+    {
+        if (!_ownsConnection)
+        {
+            return;
+        }
+
+        _connection.Dispose();
+        // Sqlite pools native handles per connection string; clear so the file is unlocked for delete.
+        SqliteConnection.ClearPool(_connection);
+        if (TempCopyPath is not null)
+        {
+            File.Delete(TempCopyPath);
+        }
     }
 
     /// <summary>
@@ -61,6 +92,8 @@ public sealed class MasterDb
         return races;
     }
 
+    // As of the 2026-07 Global master.mdb, every race reachable via race_trophy has grade
+    // 100/200/300 (verified by query), so Ex is a forward-compat fallback, not a live bucket.
     private static RaceGrade MapGrade(int grade) => grade switch
     {
         100 => RaceGrade.G1,

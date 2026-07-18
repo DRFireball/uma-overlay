@@ -8,8 +8,8 @@ race schedules. Live game state arrives from a separately-built hook over a loca
 Full scope & decisions: `~/.claude/plans/i-d-like-to-scope-zany-corbato.md`.
 
 ## Projects
-| Project | Target | Builds on |
-|---|---|---|
+| Project | Target | Builds on | Purpose |
+|---|---|---|---|
 | `src/UmaCompanion.Core` | `net8.0` | Linux / Windows | Data layer + engines (master.mdb reader, training/schedule/trophy). No UI deps. |
 | `tests/UmaCompanion.Core.Tests` | `net8.0` | Linux / Windows | xUnit tests for Core. |
 | `src/UmaCompanion.App` *(planned)* | `net8.0-windows` | **Windows only** (WPF) | Companion window + WebSocket server. |

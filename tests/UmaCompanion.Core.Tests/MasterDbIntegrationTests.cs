@@ -6,20 +6,18 @@ namespace UmaCompanion.Core.Tests;
 
 /// <summary>
 /// Exercises the reader against a real master.mdb when one is available. Point at a copy via the
-/// UMA_MASTER_MDB env var (CI has none, so these self-skip by passing trivially).
+/// UMA_MASTER_MDB env var; without it the test reports as Skipped (never silently green).
 /// </summary>
 public class MasterDbIntegrationTests
 {
-    private static string? RealDbPath =>
-        Environment.GetEnvironmentVariable("UMA_MASTER_MDB") is { Length: > 0 } p && File.Exists(p) ? p : null;
-
-    [Fact]
+    [SkippableFact]
     public void GetTrophyRaces_AgainstRealDb_ReturnsManyG1RacesWithNames()
     {
-        var path = RealDbPath;
-        if (path is null) return; // no real DB available in this environment
+        var path = Environment.GetEnvironmentVariable("UMA_MASTER_MDB");
+        Skip.If(string.IsNullOrEmpty(path) || !File.Exists(path),
+            "UMA_MASTER_MDB is not set or does not point at an existing master.mdb");
 
-        var db = MasterDb.OpenReadOnlyCopy(path);
+        using var db = MasterDb.OpenReadOnlyCopy(path!);
         var races = db.GetTrophyRaces();
 
         Assert.True(races.Count > 50, $"expected many trophy races, got {races.Count}");
