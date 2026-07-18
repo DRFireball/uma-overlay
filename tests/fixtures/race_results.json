@@ -1,0 +1,4 @@
+{ "v": 1, "type": "race_results", "payload": [
+    { "chara_id": 1001, "race_id": 1001, "won": true },
+    { "chara_id": 1001, "race_id": 1005, "won": true },
+    { "chara_id": 1001, "race_id": 1010, "won": true } ] }

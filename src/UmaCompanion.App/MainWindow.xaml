@@ -1,0 +1,68 @@
+<Window x:Class="UmaCompanion.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Uma Companion — Missing Trophies" Height="640" Width="720"
+        Background="#FF1B1D24" TextOptions.TextFormattingMode="Display">
+    <Window.Resources>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#FFE6E8EF" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="Missing Trophy Schedule" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding Status}" Foreground="#FF9AA3B2" Margin="0,4,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Stats strip -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,14,0,10">
+            <Border Background="#FF262A35" CornerRadius="8" Padding="14,8" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="MISSING" FontSize="11" Foreground="#FF9AA3B2" />
+                    <TextBlock Text="{Binding MissingCount}" FontSize="24" FontWeight="Bold" Foreground="#FFF2C14E" />
+                </StackPanel>
+            </Border>
+            <Border Background="#FF262A35" CornerRadius="8" Padding="14,8" Margin="0,0,10,0">
+                <StackPanel>
+                    <TextBlock Text="WON" FontSize="11" Foreground="#FF9AA3B2" />
+                    <TextBlock Text="{Binding WonCount}" FontSize="24" FontWeight="Bold" Foreground="#FF6FCF97" />
+                </StackPanel>
+            </Border>
+            <Border Background="#FF262A35" CornerRadius="8" Padding="14,8">
+                <StackPanel>
+                    <TextBlock Text="TOTAL TROPHIES" FontSize="11" Foreground="#FF9AA3B2" />
+                    <TextBlock Text="{Binding TotalTrophies}" FontSize="24" FontWeight="Bold" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- Schedule table -->
+        <ListView Grid.Row="2" ItemsSource="{Binding Schedule}"
+                  Background="#FF20232C" BorderBrush="#FF31353F" Foreground="#FFE6E8EF">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Turn" Width="150" DisplayMemberBinding="{Binding Slot}" />
+                    <GridViewColumn Header="Race" Width="290" DisplayMemberBinding="{Binding Race}" />
+                    <GridViewColumn Header="Grade" Width="60" DisplayMemberBinding="{Binding Grade}" />
+                    <GridViewColumn Header="Distance" Width="140" DisplayMemberBinding="{Binding Distance}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <!-- Footer -->
+        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+            <TextBlock Text="{Binding HookActivity}" Foreground="#FF9AA3B2" />
+            <TextBlock Text="{Binding MasterDbPath}" Foreground="#FF6B7280" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+    </Grid>
+</Window>
