@@ -1,3 +1,7 @@
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+
 namespace UmaCompanion.Core.Reading;
 
 /// <summary>A known race matched against an OCR'd line, with the edit distance that matched it.</summary>
@@ -7,25 +11,46 @@ public sealed record RaceNameMatch(int RaceId, string Name, int Distance);
 /// Matches noisy OCR text against the known race names from master.mdb. OCR output routinely
 /// mangles a character or two and surrounds the name with other screen text, so matching is
 /// fuzzy (bounded edit distance) and substring-based (the name may appear anywhere in the line).
+/// Each race also matches under the game's label abbreviations ("Musashino S." for
+/// "Musashino Stakes", "Challenge C." for "Challenge Cup"), as used in the Trophy Room.
 /// </summary>
-public sealed class RaceNameMatcher
+public sealed partial class RaceNameMatcher
 {
-    private readonly List<(int RaceId, string Name, string Normalized)> _races;
+    [GeneratedRegex(@"\bStakes\b", RegexOptions.IgnoreCase)]
+    private static partial Regex StakesWord();
+
+    [GeneratedRegex(@"\bCup\b", RegexOptions.IgnoreCase)]
+    private static partial Regex CupWord();
+
+    private readonly List<(int RaceId, string Name, string[] Patterns)> _races;
 
     public RaceNameMatcher(IEnumerable<(int RaceId, string Name)> races)
     {
         _races = races
             .GroupBy(r => r.RaceId)
             .Select(g => g.First())
-            .Select(r => (r.RaceId, r.Name, Normalize(r.Name)))
+            .Select(r => (r.RaceId, r.Name, BuildPatterns(r.Name)))
             .Where(r => r.Item3.Length > 0)
             .ToList();
     }
 
+    /// <summary>The full normalized name plus its abbreviated form when they differ.</summary>
+    private static string[] BuildPatterns(string name)
+    {
+        var full = Normalize(name);
+        if (full.Length == 0)
+        {
+            return Array.Empty<string>();
+        }
+        var abbreviated = Normalize(CupWord().Replace(StakesWord().Replace(name, "S"), "C"));
+        return abbreviated == full ? new[] { full } : new[] { full, abbreviated };
+    }
+
     /// <summary>
-    /// The best race whose name approximately appears in <paramref name="ocrLine"/>, or null when
-    /// nothing matches within tolerance. Tolerance scales with name length (roughly one error per
-    /// eight characters), so short names must match exactly and long names absorb OCR noise.
+    /// The best race whose name (or abbreviation) approximately appears in
+    /// <paramref name="ocrLine"/>, or null when nothing matches within tolerance. Tolerance
+    /// scales with pattern length (roughly one error per eight characters), so short names must
+    /// match exactly and long names absorb OCR noise.
     /// </summary>
     public RaceNameMatch? FindBest(string ocrLine)
     {
@@ -36,29 +61,48 @@ public sealed class RaceNameMatcher
         }
 
         RaceNameMatch? best = null;
-        foreach (var (raceId, name, normalized) in _races)
+        foreach (var (raceId, name, patterns) in _races)
         {
-            var maxDistance = normalized.Length / 8;
-            var distance = SubstringEditDistance(normalized, line);
-            if (distance > maxDistance)
+            foreach (var pattern in patterns)
             {
-                continue;
-            }
-            // Prefer the closest match; on equal distance the longer (more specific) name wins —
-            // "Tokyo Yushun (Japanese Derby)" must beat any shorter name embedded in the same line.
-            if (best is null
-                || distance < best.Distance
-                || (distance == best.Distance && name.Length > best.Name.Length))
-            {
-                best = new RaceNameMatch(raceId, name, distance);
+                var distance = SubstringEditDistance(pattern, line);
+                if (distance > pattern.Length / 8)
+                {
+                    continue;
+                }
+                // Prefer the closest match; on equal distance the longer (more specific) name
+                // wins — "Tokyo Yushun (Japanese Derby)" must beat a shorter embedded name.
+                if (best is null
+                    || distance < best.Distance
+                    || (distance == best.Distance && name.Length > best.Name.Length))
+                {
+                    best = new RaceNameMatch(raceId, name, distance);
+                }
             }
         }
         return best;
     }
 
-    /// <summary>Lowercases and strips everything but letters and digits, collapsing OCR spacing noise.</summary>
+    /// <summary>
+    /// Lowercases, folds diacritics (OCR loves reading "Cup" as "Cüp"), and strips everything but
+    /// letters and digits, collapsing OCR spacing noise.
+    /// </summary>
     internal static string Normalize(string text)
-        => new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+    {
+        var sb = new StringBuilder(text.Length);
+        foreach (var c in text.Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark)
+            {
+                continue; // the accent split off a base letter — drop it
+            }
+            if (char.IsLetterOrDigit(c))
+            {
+                sb.Append(char.ToLowerInvariant(c));
+            }
+        }
+        return sb.ToString();
+    }
 
     /// <summary>
     /// Minimum edit distance between <paramref name="pattern"/> and any substring of

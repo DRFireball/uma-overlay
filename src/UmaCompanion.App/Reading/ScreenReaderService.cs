@@ -111,18 +111,21 @@ public sealed class ScreenReaderService : IDisposable
         }
         try
         {
-            IReadOnlyList<string> lines;
+            IReadOnlyList<OcrLine> lines;
+            IReadOnlyList<int> trophyIds;
             using (bitmap)
             {
-                lines = await _ocr!.ReadLinesAsync(bitmap);
+                lines = await _ocr!.ReadAsync(bitmap);
                 if (_dumper is not null)
                 {
-                    await _dumper.DumpAsync(lines, bitmap);
+                    await _dumper.DumpAsync(lines.Select(l => l.Text).ToList(), bitmap);
                 }
+                // Owned-trophy discrimination probes the frame's pixels — do it before disposal.
+                trophyIds = _trophyInterpreter.OwnedRaceIds(
+                    lines, region => BitmapBrightnessProbe.MeanLuminance(bitmap, region));
             }
 
-            // Trophy Room sync: every visible trophy is a past win; emit each id once per session.
-            var trophyIds = _trophyInterpreter.WonRaceIds(lines);
+            // Trophy Room sync: every visibly owned trophy is a past win; emit each id once per session.
             if (trophyIds.Count > 0)
             {
                 _lastEmitted = null;
@@ -135,7 +138,8 @@ public sealed class ScreenReaderService : IDisposable
                 return;
             }
 
-            var result = _resultInterpreter.Interpret(lines);
+            var texts = lines.Select(l => l.Text).ToList();
+            var result = _resultInterpreter.Interpret(texts);
             if (result is null)
             {
                 _lastEmitted = null; // result screen gone; the next one may be the same race again

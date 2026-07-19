@@ -11,6 +11,8 @@
     <RootNamespace>UmaCompanion.App</RootNamespace>
     <!-- Lets the WSL/Linux side restore & compile the solution; the app still only RUNS on Windows. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- BitmapBrightnessProbe reads captured pixels via IMemoryBufferByteAccess. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>

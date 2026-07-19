@@ -74,6 +74,24 @@ public class RaceNameMatcherTests
         Assert.Equal(0, match.Distance);
     }
 
+    [Theory]
+    [InlineData("Musashino S.", 2001, "Musashino Stakes")]
+    [InlineData("Challenge C.", 2002, "Challenge Cup")]
+    [InlineData("Sparking Lady Cup", 2003, "Sparking Lady Cup")] // full form still matches
+    public void FindBest_TrophyRoomAbbreviations_MatchFullNames(string label, int expectedId, string name)
+    {
+        var matcher = new RaceNameMatcher(new[]
+        {
+            (2001, "Musashino Stakes"), (2002, "Challenge Cup"), (2003, "Sparking Lady Cup"),
+        });
+
+        var match = matcher.FindBest(label);
+
+        Assert.NotNull(match);
+        Assert.Equal(expectedId, match.RaceId);
+        Assert.Equal(name, match.Name);
+    }
+
     [Fact]
     public void SubstringEditDistance_PatternInsideText_IsZero()
     {

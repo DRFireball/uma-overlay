@@ -29,4 +29,9 @@
     <ProjectReference Include="..\..\src\UmaCompanion.App\UmaCompanion.App.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\fixtures\trophy-room-g3.png" Link="fixtures\trophy-room-g3.png"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
