@@ -27,7 +27,7 @@ public sealed class ScreenReaderService : IDisposable
 
     private WindowCaptureSource? _capture;
     private RaceResult? _lastEmitted;
-    private readonly HashSet<int> _trophySeen = new(); // ids already emitted from Trophy Room sync
+    private readonly ConsecutiveFrameConfirmer _trophyConfirmer = new();
     private int _busy;
     private bool _disposed;
 
@@ -112,6 +112,7 @@ public sealed class ScreenReaderService : IDisposable
         try
         {
             IReadOnlyList<OcrLine> lines;
+            bool isTrophyRoom;
             IReadOnlyList<int> trophyIds;
             using (bitmap)
             {
@@ -120,23 +121,28 @@ public sealed class ScreenReaderService : IDisposable
                 {
                     await _dumper.DumpAsync(lines.Select(l => l.Text).ToList(), bitmap);
                 }
+                isTrophyRoom = _trophyInterpreter.IsTrophyRoomScreen(lines);
                 // Owned-trophy discrimination probes the frame's pixels — do it before disposal.
-                trophyIds = _trophyInterpreter.OwnedRaceIds(
-                    lines, region => BitmapBrightnessProbe.MeanLuminance(bitmap, region));
+                trophyIds = isTrophyRoom
+                    ? _trophyInterpreter.OwnedRaceIds(
+                        lines, region => BitmapBrightnessProbe.MeanLuminance(bitmap, region))
+                    : Array.Empty<int>();
             }
 
-            // Trophy Room sync: every visibly owned trophy is a past win; emit each id once per session.
-            if (trophyIds.Count > 0)
+            // Trophy Room sync: a trophy counts once confirmed across two consecutive frames, so
+            // transient matches while swiping pages don't leak in. Each id emits once per session.
+            if (isTrophyRoom)
             {
                 _lastEmitted = null;
-                var newIds = trophyIds.Where(_trophySeen.Add).ToList();
-                if (newIds.Count > 0)
+                var confirmed = _trophyConfirmer.Confirm(trophyIds);
+                if (confirmed.Count > 0)
                 {
                     _onFrame(new RaceResultsFrame(
-                        newIds.Select(id => new RaceResult(CharaId: 0, RaceId: id, Won: true)).ToList()));
+                        confirmed.Select(id => new RaceResult(CharaId: 0, RaceId: id, Won: true)).ToList()));
                 }
                 return;
             }
+            _trophyConfirmer.BreakStreak();
 
             var texts = lines.Select(l => l.Text).ToList();
             var result = _resultInterpreter.Interpret(texts);
@@ -170,7 +176,7 @@ public sealed class ScreenReaderService : IDisposable
     {
         lock (_gate)
         {
-            _trophySeen.Clear();
+            _trophyConfirmer.Reset();
             _lastEmitted = null;
         }
     }
