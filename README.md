@@ -1,5 +1,8 @@
 # Uma Companion
 
+Private repo: <https://github.com/4-Fireball/uma-overlay> — the hub both working copies
+(Windows + WSL) push to and pull from.
+
 Companion app for Umamusume: Pretty Derby (Steam Global). Surfaces GameTora-style skill
 reference/purchase recommendations, missing race trophies, and aptitude-based race schedules.
 
