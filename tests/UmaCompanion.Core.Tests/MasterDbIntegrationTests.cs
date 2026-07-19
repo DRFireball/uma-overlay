@@ -21,9 +21,16 @@ public class MasterDbIntegrationTests
         using var db = MasterDb.OpenReadOnlyCopy(path!);
         var races = db.GetTrophyRaces();
 
-        Assert.True(races.Count > 50, $"expected many trophy races, got {races.Count}");
+        // Collapsed to the game's Trophy Room set (one per named race), not the raw race_trophy
+        // rows (~267). G2/G3 tabs match the game exactly (42/76); total is well under the old 267.
+        Assert.InRange(races.Count, 145, 165);
+        Assert.Equal(42, races.Count(r => r.Grade == RaceGrade.G2));
+        Assert.Equal(76, races.Count(r => r.Grade == RaceGrade.G3));
         Assert.All(races, r => Assert.False(string.IsNullOrWhiteSpace(r.Name)));
         Assert.Contains(races, r => r.Name.Contains("Arima Kinen") && r.Grade == RaceGrade.G1);
+        // Duplicate names collapse to one entry at the career id; junk abbreviations are gone.
+        Assert.Equal(new[] { 1019 }, races.Where(r => r.Name == "Japan Cup").Select(r => r.RaceId));
+        Assert.DoesNotContain(races, r => r.Name == "Hanshin J.F.");
     }
 
     [SkippableFact]

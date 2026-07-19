@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using UmaCompanion.Core.Races;
 using UmaCompanion.Core.Skills;
@@ -66,8 +67,12 @@ public sealed class MasterDb : IDisposable
     }
 
     /// <summary>
-    /// Every distinct trophy-eligible race, with its English name and grade, ordered by race id.
-    /// Multiple trophy rows for the same race (e.g. Satsuki Sho) collapse to a single entry.
+    /// The trophy races as the in-game Trophy Room shows them: one entry per named race. The
+    /// raw <c>race_trophy</c> table carries far more rows than the room displays — legend/scenario
+    /// variants that repeat a race's name (Japan Cup appears four times), junk duplicates whose
+    /// whole name is the trophy abbreviation ("Hanshin J.F." beside "Hanshin Juvenile Fillies"),
+    /// and unnamed data artifacts. Those are collapsed to the canonical race (the lowest race id
+    /// for a name — the career race), so the count matches the game rather than inflating it.
     /// </summary>
     public IReadOnlyList<TrophyRace> GetTrophyRaces()
     {
@@ -82,16 +87,40 @@ public sealed class MasterDb : IDisposable
             """;
         cmd.Parameters.AddWithValue("$nameCat", RaceNameCategory);
 
-        var races = new List<TrophyRace>();
+        var byName = new Dictionary<string, TrophyRace>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
+            if (reader.IsDBNull(2))
+            {
+                continue; // unnamed data row — not a Trophy Room entry
+            }
+            var name = reader.GetString(2);
+            if (IsAbbreviationName(name))
+            {
+                continue; // junk duplicate named after the trophy abbreviation
+            }
             var raceId = reader.GetInt32(0);
-            var grade = MapGrade(reader.GetInt32(1));
-            var name = reader.IsDBNull(2) ? $"Race {raceId}" : reader.GetString(2);
-            races.Add(new TrophyRace(raceId, name, grade));
+            var key = CanonicalNameKey(name);
+            if (!byName.TryGetValue(key, out var existing) || raceId < existing.RaceId)
+            {
+                byName[key] = new TrophyRace(raceId, name, MapGrade(reader.GetInt32(1)));
+            }
         }
-        return races;
+        return byName.Values.OrderBy(r => r.RaceId).ToList();
+    }
+
+    private static string CanonicalNameKey(string name)
+        => new(name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+
+    // A name whose final token is a pure run of single-letter initials ("S.", "F.S.", "J.F.") is
+    // a bare trophy abbreviation, not a canonical race name (the "St." of "St. Lite Kinen" isn't).
+    private static readonly Regex InitialsOnlyToken = new(@"^([A-Za-z]\.)+$", RegexOptions.Compiled);
+
+    private static bool IsAbbreviationName(string name)
+    {
+        var tokens = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length > 0 && InitialsOnlyToken.IsMatch(tokens[^1]);
     }
 
     /// <summary>
