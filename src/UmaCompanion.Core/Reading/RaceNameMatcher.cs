@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace UmaCompanion.Core.Reading;
 
@@ -24,6 +25,12 @@ public sealed class RaceNameMatcher
     // always shows in full contribute no loose prefix patterns.
     private const int MinAbbreviationLength = 6;
 
+    // A final token that is a pure run of single-letter initials ("S.", "F.S.", "J.F."). master.mdb
+    // carries junk legend-race duplicates whose whole NAME is the trophy abbreviation ("Hanshin
+    // J.F." alongside the real "Hanshin Juvenile Fillies"); matching to those double-counts a page.
+    // The two-char "St." of "St. Lite Kinen" is not a single-letter initial, so real names survive.
+    private static readonly Regex InitialsOnlyToken = new(@"^([A-Za-z]\.)+$", RegexOptions.Compiled);
+
     private readonly List<(int RaceId, string Name, string[] Patterns)> _races;
 
     public RaceNameMatcher(IEnumerable<(int RaceId, string Name)> races)
@@ -31,9 +38,17 @@ public sealed class RaceNameMatcher
         _races = races
             .GroupBy(r => r.RaceId)
             .Select(g => g.First())
+            .Where(r => !IsAbbreviationName(r.Name))
             .Select(r => (r.RaceId, r.Name, BuildPatterns(r.Name)))
             .Where(r => r.Item3.Length > 0)
             .ToList();
+    }
+
+    /// <summary>Whether a name is a bare trophy abbreviation (its last token is only initials).</summary>
+    private static bool IsAbbreviationName(string name)
+    {
+        var tokens = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length > 0 && InitialsOnlyToken.IsMatch(tokens[^1]);
     }
 
     /// <summary>

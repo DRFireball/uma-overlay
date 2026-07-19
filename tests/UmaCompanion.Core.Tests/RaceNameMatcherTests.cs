@@ -138,6 +138,32 @@ public class RaceNameMatcherTests
         Assert.Equal(1022, match.RaceId);
     }
 
+    [Theory]
+    [InlineData("Hanshin J.F.")]   // junk duplicate of "Hanshin Juvenile Fillies"
+    [InlineData("Asahi Hai F.S.")] // junk duplicate of "Asahi Hai Futurity Stakes"
+    [InlineData("Sprinters S.")]   // junk duplicate of "Sprinters Stakes"
+    public void AbbreviationOnlyNames_AreExcludedEntirely(string junkName)
+    {
+        // Even matched against ONLY the junk entry, its own label must not resolve — otherwise a
+        // garbled OCR of the real race's label sneaks a second, duplicate id onto the page.
+        var matcher = new RaceNameMatcher(new[] { (5970, junkName) });
+
+        Assert.Null(matcher.FindBest(junkName));
+    }
+
+    [Fact]
+    public void FindBest_RealNameWithLeadingAbbreviation_IsNotExcluded()
+    {
+        // "St. Lite Kinen" contains "St." but is a real race — only trailing pure-initial tokens
+        // mark the junk duplicates.
+        var matcher = new RaceNameMatcher(new[] { (2023, "St. Lite Kinen") });
+
+        var match = matcher.FindBest("St. Lite Kinen");
+
+        Assert.NotNull(match);
+        Assert.Equal(2023, match.RaceId);
+    }
+
     [Fact]
     public void SubstringEditDistance_PatternInsideText_IsZero()
     {
