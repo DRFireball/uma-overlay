@@ -14,7 +14,9 @@ namespace UmaCompanion.App.Reading;
 public sealed class ScreenReaderService : IDisposable
 {
     private static readonly TimeSpan SearchInterval = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan CaptureInterval = TimeSpan.FromSeconds(1);
+    // ~3 fps: fast enough that a browsed page yields the two frames the confirmer needs before the
+    // player swipes on, while the busy-flag still drops frames whenever OCR is mid-flight.
+    private static readonly TimeSpan CaptureInterval = TimeSpan.FromMilliseconds(300);
 
     private readonly RaceResultScreenInterpreter _resultInterpreter;
     private readonly TrophyRoomScreenInterpreter _trophyInterpreter;
