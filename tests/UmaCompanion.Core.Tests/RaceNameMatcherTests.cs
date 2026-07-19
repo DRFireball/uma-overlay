@@ -78,16 +78,18 @@ public class RaceNameMatcherTests
     [InlineData("Musashino S.", 2001, "Musashino Stakes")]
     [InlineData("Challenge C.", 2002, "Challenge Cup")]
     [InlineData("Sparking Lady Cup", 2003, "Sparking Lady Cup")] // full form still matches
-    [InlineData("Mile Ch.", 2004, "Mile Championship")]
-    [InlineData("Hanshin J.F.", 2005, "Hanshin Juvenile Fillies")]
+    [InlineData("Mile Ch.", 2004, "Mile Championship")]          // trailing 2-letter prefix
+    [InlineData("Hanshin J.F.", 2005, "Hanshin Juvenile Fillies")] // two trailing words -> initials
     [InlineData("Asahi Hai F.S.", 2006, "Asahi Hai Futurity Stakes")]
+    [InlineData("Victoria M.", 2007, "Victoria Mile")]           // positional: trailing word dropped
+    [InlineData("NHK Mile C.", 2008, "NHK Mile Cup")]            // same word (Mile) kept, not dropped
     public void FindBest_TrophyRoomAbbreviations_MatchFullNames(string label, int expectedId, string name)
     {
         var matcher = new RaceNameMatcher(new[]
         {
             (2001, "Musashino Stakes"), (2002, "Challenge Cup"), (2003, "Sparking Lady Cup"),
             (2004, "Mile Championship"), (2005, "Hanshin Juvenile Fillies"),
-            (2006, "Asahi Hai Futurity Stakes"),
+            (2006, "Asahi Hai Futurity Stakes"), (2007, "Victoria Mile"), (2008, "NHK Mile Cup"),
         });
 
         var match = matcher.FindBest(label);
@@ -95,6 +97,17 @@ public class RaceNameMatcherTests
         Assert.NotNull(match);
         Assert.Equal(expectedId, match.RaceId);
         Assert.Equal(name, match.Name);
+    }
+
+    [Fact]
+    public void FindBest_ShortFullNameShownInFull_DoesNotAbbreviate()
+    {
+        // "Oka Sho" is short enough to always display in full; its initials must not become a
+        // loose pattern ("okas") that risks matching unrelated screen text.
+        var matcher = new RaceNameMatcher(new[] { (2020, "Oka Sho") });
+
+        Assert.Null(matcher.FindBest("Oka S."));
+        Assert.NotNull(matcher.FindBest("Oka Sho"));
     }
 
     [Fact]

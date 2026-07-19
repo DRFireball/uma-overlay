@@ -66,7 +66,53 @@ public class TrophyRoomFixtureTests
         }
     }
 
-    // The G1 page fixture: 15 owned trophies, no silhouettes, and the hard cases — the dark
+    // G1 page 1: 15 owned trophies including the hard cases — "Victoria M." (trailing word
+    // dropped) vs "NHK Mile C." (Mile kept), the dark Tenno Sho (Spring) plaque, and the
+    // "Japanese Derby" parenthetical alias of "Tokyo Yushun (Japanese Derby)".
+    private static readonly (int Id, string Name)[] G1Page1Races =
+    {
+        (1001, "February Stakes"),
+        (1002, "Takamatsunomiya Kinen"),
+        (1003, "Osaka Hai"),
+        (1004, "Oka Sho"),
+        (1005, "Satsuki Sho"),
+        (1006, "Tenno Sho (Spring)"),
+        (1007, "NHK Mile Cup"),
+        (1008, "Victoria Mile"),
+        (1009, "Japanese Oaks"),
+        (1010, "Tokyo Yushun (Japanese Derby)"),
+        (1011, "Yasuda Kinen"),
+        (1012, "Takarazuka Kinen"),
+        (1013, "Sprinters Stakes"),
+        (1014, "Shuka Sho"),
+        (1015, "Kikuka Sho"),
+        // Decoy: master.mdb "Mile Championship" must not steal "NHK Mile C.".
+        (1018, "Mile Championship"),
+        (1016, "Tenno Sho (Autumn)"), // must not win "Tenno Sho (Spring)"
+    };
+
+    [SkippableFact]
+    public async Task RealG1Page1Capture_FindsAllFifteenOwnedTrophies_IncludingAbbreviations()
+    {
+        var reader = WindowsOcrReader.TryCreate();
+        Skip.If(reader is null, "no Windows OCR language pack installed");
+
+        using var bitmap = await LoadFixtureAsync("trophy-room-g1-page1.png");
+        var lines = await reader!.ReadAsync(bitmap);
+
+        var interpreter = new TrophyRoomScreenInterpreter(new RaceNameMatcher(
+            G1Page1Races.Select(r => (r.Id, r.Name))));
+        var owned = interpreter.OwnedRaceIds(
+            lines, region => BitmapBrightnessProbe.MeanLuminance(bitmap, region));
+
+        foreach (var id in Enumerable.Range(1001, 15))
+        {
+            Assert.Contains(id, owned);
+        }
+        Assert.DoesNotContain(1018, owned); // Mile Championship is not on this page
+    }
+
+    // G1 page 2: 15 owned trophies, no silhouettes, and the hard cases — the dark
     // Tenno Sho (Autumn) plaque, "Mile Ch."/"Hanshin J.F."/"Asahi Hai F.S." abbreviations, a
     // wrapped "Queen Elizabeth II / Cup", and master.mdb duplicate-name decoys.
     private static readonly (int Id, string Name)[] G1Races =
@@ -92,12 +138,12 @@ public class TrophyRoomFixtureTests
     };
 
     [SkippableFact]
-    public async Task RealG1Capture_FindsAllFifteenOwnedTrophies_UnderCareerIds()
+    public async Task RealG1Page2Capture_FindsAllFifteenOwnedTrophies_UnderCareerIds()
     {
         var reader = WindowsOcrReader.TryCreate();
         Skip.If(reader is null, "no Windows OCR language pack installed");
 
-        using var bitmap = await LoadFixtureAsync("trophy-room-g1.png");
+        using var bitmap = await LoadFixtureAsync("trophy-room-g1-page2.png");
         var lines = await reader!.ReadAsync(bitmap);
 
         var interpreter = new TrophyRoomScreenInterpreter(new RaceNameMatcher(

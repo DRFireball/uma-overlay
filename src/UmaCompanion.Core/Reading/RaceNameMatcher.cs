@@ -10,21 +10,19 @@ public sealed record RaceNameMatch(int RaceId, string Name, int Distance);
 /// Matches noisy OCR text against the known race names from master.mdb. OCR output routinely
 /// mangles a character or two and surrounds the name with other screen text, so matching is
 /// fuzzy (bounded edit distance) and substring-based (the name may appear anywhere in the line).
-/// Each race also matches under the game's label abbreviations as used in the Trophy Room —
-/// "Musashino S.", "Champions C.", "Mile Ch.", "Hanshin J.F.", "Asahi Hai F.S.".
+/// Each race also matches under the game's Trophy Room label abbreviations, which truncate a
+/// suffix of words to a 1-2 letter prefix to fit a fixed width — "Musashino S.", "Champions C.",
+/// "Mile Ch.", "Victoria M.", "Hanshin J.F.", "Asahi Hai F.S." — modelled generally rather than
+/// per-word, since the same word abbreviates or not depending on position ("NHK Mile Cup" ->
+/// "NHK Mile C." keeps Mile, but "Victoria Mile" -> "Victoria M." drops it).
 /// </summary>
 public sealed class RaceNameMatcher
 {
-    // Words the game's trophy labels abbreviate, observed on real Trophy Room captures.
-    private static readonly Dictionary<string, string> WordAbbreviations = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["Stakes"] = "S",
-        ["Cup"] = "C",
-        ["Championship"] = "Ch",
-        ["Juvenile"] = "J",
-        ["Fillies"] = "F",
-        ["Futurity"] = "F",
-    };
+    // Abbreviated patterns below this length match as substrings inside unrelated labels ("milec"
+    // landing inside "nhkmilec"), so over-abbreviated forms are dropped. This alone also keeps
+    // truly short names out (Oka Sho -> "okas"/"okash" are both too short), so names that the game
+    // always shows in full contribute no loose prefix patterns.
+    private const int MinAbbreviationLength = 6;
 
     private readonly List<(int RaceId, string Name, string[] Patterns)> _races;
 
@@ -38,18 +36,64 @@ public sealed class RaceNameMatcher
             .ToList();
     }
 
-    /// <summary>The full normalized name plus its abbreviated form when they differ.</summary>
+    /// <summary>
+    /// The full normalized name plus every trophy-label abbreviation: keep the first i words in
+    /// full and truncate each remaining word to its first 1 or 2 letters, for every split point.
+    /// </summary>
     private static string[] BuildPatterns(string name)
     {
-        var full = Normalize(name);
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Select(Normalize).Where(w => w.Length > 0).ToArray();
+        var full = string.Concat(words);
         if (full.Length == 0)
         {
             return Array.Empty<string>();
         }
-        var abbreviated = Normalize(string.Join(' ',
-            name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(word => WordAbbreviations.GetValueOrDefault(word, word))));
-        return abbreviated == full ? new[] { full } : new[] { full, abbreviated };
+
+        var patterns = new HashSet<string> { full };
+
+        // Parenthetical alias: the game labels "Tokyo Yushun (Japanese Derby)" as just
+        // "Japanese Derby". Add the inner text as its own pattern, but only when it is multi-word
+        // — a single-word qualifier like "(Spring)"/"(Autumn)" would collide across variants and
+        // is disambiguated by the full name instead.
+        var alias = Normalize(ParentheticalContent(name, out var innerHasSpace));
+        if (innerHasSpace && alias.Length >= MinAbbreviationLength)
+        {
+            patterns.Add(alias);
+        }
+
+        if (words.Length >= 2)
+        {
+            for (var i = 1; i < words.Length; i++) // words[0..i) kept full, words[i..] abbreviated
+            {
+                var head = string.Concat(words.Take(i));
+                foreach (var prefixLen in new[] { 1, 2 })
+                {
+                    var tail = string.Concat(words.Skip(i).Select(w => w[..Math.Min(prefixLen, w.Length)]));
+                    var pattern = head + tail;
+                    if (pattern.Length >= MinAbbreviationLength)
+                    {
+                        patterns.Add(pattern);
+                    }
+                }
+            }
+        }
+        return patterns.ToArray();
+    }
+
+    /// <summary>The text inside the first (…) group, or empty; reports whether it has a space.</summary>
+    private static string ParentheticalContent(string name, out bool hasSpace)
+    {
+        hasSpace = false;
+        var open = name.IndexOf('(');
+        var close = open >= 0 ? name.IndexOf(')', open + 1) : -1;
+        if (close < 0)
+        {
+            return string.Empty;
+        }
+        var inner = name[(open + 1)..close];
+        hasSpace = inner.Contains(' ');
+        return inner;
     }
 
     /// <summary>
@@ -67,6 +111,7 @@ public sealed class RaceNameMatcher
         }
 
         RaceNameMatch? best = null;
+        var bestPatternLength = 0;
         foreach (var (raceId, name, patterns) in _races)
         {
             foreach (var pattern in patterns)
@@ -76,16 +121,20 @@ public sealed class RaceNameMatcher
                 {
                     continue;
                 }
-                // Prefer the closest match; on equal distance the longer (more specific) name
-                // wins — "Tokyo Yushun (Japanese Derby)" must beat a shorter embedded name.
-                // On a full tie take the LOWEST race id: master.mdb repeats names for legend-race
-                // variants (Japan Cup = 1019 and 5920…), and the career race is the low id.
-                if (best is null
+                // Rank by, in order: closeness; then the longer MATCHED pattern (a full
+                // "nhkmilec" beats another race's stray "milec" substring); then the longer name
+                // ("Tokyo Yushun (Japanese Derby)" over a shorter embedded name); then the LOWEST
+                // race id — master.mdb repeats names for legend variants (Japan Cup = 1019 and
+                // 5920…) and the career race is the low id.
+                var better = best is null
                     || distance < best.Distance
-                    || (distance == best.Distance && name.Length > best.Name.Length)
-                    || (distance == best.Distance && name.Length == best.Name.Length && raceId < best.RaceId))
+                    || (distance == best.Distance && pattern.Length > bestPatternLength)
+                    || (distance == best.Distance && pattern.Length == bestPatternLength && name.Length > best.Name.Length)
+                    || (distance == best.Distance && pattern.Length == bestPatternLength && name.Length == best.Name.Length && raceId < best.RaceId);
+                if (better)
                 {
                     best = new RaceNameMatch(raceId, name, distance);
+                    bestPatternLength = pattern.Length;
                 }
             }
         }
