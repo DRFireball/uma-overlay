@@ -9,4 +9,20 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
     }
+
+    private void OnResetWins(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not CompanionViewModel viewModel)
+        {
+            return;
+        }
+        var choice = MessageBox.Show(this,
+            "Clear every recorded win? The missing-trophy list resets to full; " +
+            "re-browsing the Trophy Room re-syncs it.",
+            "Reset wins", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (choice == MessageBoxResult.Yes)
+        {
+            viewModel.ResetWins();
+        }
+    }
 }

@@ -162,6 +162,19 @@ public sealed class ScreenReaderService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Forgets what has already been emitted this session. After the user resets their win
+    /// tracker, re-browsing the same Trophy Room pages must re-emit those trophies.
+    /// </summary>
+    public void ResetSession()
+    {
+        lock (_gate)
+        {
+            _trophySeen.Clear();
+            _lastEmitted = null;
+        }
+    }
+
     public void Dispose()
     {
         lock (_gate)

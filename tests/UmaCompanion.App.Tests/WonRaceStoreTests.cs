@@ -36,6 +36,17 @@ public class WonRaceStoreTests : IDisposable
     }
 
     [Fact]
+    public void Save_EmptySet_ResetsTheStore()
+    {
+        var store = new WonRaceStore(StorePath);
+        store.Save(new[] { 1013, 1005 });
+
+        store.Save(Array.Empty<int>()); // the reset-wins path
+
+        Assert.Empty(store.Load());
+    }
+
+    [Fact]
     public void Save_OverwritesPreviousContents()
     {
         var store = new WonRaceStore(StorePath);

@@ -182,6 +182,19 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>
+    /// Clears every recorded win — memory, the persisted store, and the screen reader's
+    /// session dedup — so the tracker starts fresh. Re-browsing the Trophy Room re-syncs.
+    /// </summary>
+    public void ResetWins()
+    {
+        _wonRaceIds.Clear();
+        _wonStore?.Save(_wonRaceIds);
+        _screenReader?.ResetSession();
+        HookActivity = "Wins reset — browse the Trophy Room to re-sync.";
+        Recompute();
+    }
+
     public void Dispose()
     {
         _screenReader?.Dispose();
