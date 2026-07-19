@@ -16,25 +16,33 @@ public sealed class ScreenReaderService : IDisposable
     private static readonly TimeSpan SearchInterval = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan CaptureInterval = TimeSpan.FromSeconds(1);
 
-    private readonly RaceResultScreenInterpreter _interpreter;
+    private readonly RaceResultScreenInterpreter _resultInterpreter;
+    private readonly TrophyRoomScreenInterpreter _trophyInterpreter;
     private readonly Action<GameFrame> _onFrame;
     private readonly Action<string> _onStatus;
     private readonly WindowsOcrReader? _ocr;
+    private readonly OcrDumper? _dumper;
     private readonly Timer _searchTimer;
     private readonly object _gate = new();
 
     private WindowCaptureSource? _capture;
     private RaceResult? _lastEmitted;
+    private readonly HashSet<int> _trophySeen = new(); // ids already emitted from Trophy Room sync
     private int _busy;
     private bool _disposed;
 
     public ScreenReaderService(
-        RaceResultScreenInterpreter interpreter, Action<GameFrame> onFrame, Action<string> onStatus)
+        RaceResultScreenInterpreter resultInterpreter,
+        TrophyRoomScreenInterpreter trophyInterpreter,
+        Action<GameFrame> onFrame,
+        Action<string> onStatus)
     {
-        _interpreter = interpreter;
+        _resultInterpreter = resultInterpreter;
+        _trophyInterpreter = trophyInterpreter;
         _onFrame = onFrame;
         _onStatus = onStatus;
         _ocr = WindowsOcrReader.TryCreate();
+        _dumper = OcrDumper.FromEnvironment();
         _searchTimer = new Timer(_ => SearchTick());
     }
 
@@ -107,9 +115,27 @@ public sealed class ScreenReaderService : IDisposable
             using (bitmap)
             {
                 lines = await _ocr!.ReadLinesAsync(bitmap);
+                if (_dumper is not null)
+                {
+                    await _dumper.DumpAsync(lines, bitmap);
+                }
             }
 
-            var result = _interpreter.Interpret(lines);
+            // Trophy Room sync: every visible trophy is a past win; emit each id once per session.
+            var trophyIds = _trophyInterpreter.WonRaceIds(lines);
+            if (trophyIds.Count > 0)
+            {
+                _lastEmitted = null;
+                var newIds = trophyIds.Where(_trophySeen.Add).ToList();
+                if (newIds.Count > 0)
+                {
+                    _onFrame(new RaceResultsFrame(
+                        newIds.Select(id => new RaceResult(CharaId: 0, RaceId: id, Won: true)).ToList()));
+                }
+                return;
+            }
+
+            var result = _resultInterpreter.Interpret(lines);
             if (result is null)
             {
                 _lastEmitted = null; // result screen gone; the next one may be the same race again

@@ -29,6 +29,7 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
     private TrophyPlanner? _planner;
     private LiveStateServer? _server;
     private ScreenReaderService? _screenReader;
+    private WonRaceStore? _wonStore;
 
     public CompanionViewModel()
     {
@@ -102,18 +103,25 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
             _db = MasterDb.OpenReadOnlyCopy(path);
             _planner = TrophyPlanner.FromMasterDb(_db);
             MasterDbPath = path;
-            TotalTrophies = _planner.MissingTrophies(_wonRaceIds).Count; // no wins yet ⇒ all trophies
+            TotalTrophies = _planner.MissingTrophies(Array.Empty<int>()).Count;
+
+            // Wins persist across sessions (result screens + Trophy Room sync both land here).
+            _wonStore = WonRaceStore.CreateDefault();
+            _wonRaceIds.UnionWith(_wonStore.Load());
             Recompute();
 
             _server = new LiveStateServer(ListenPort, OnFrame);
             _server.Start();
-            Status = $"Ready — {TotalTrophies} trophy races loaded. Win a race and it leaves this list.";
+            Status = $"Ready — {TotalTrophies} trophy races loaded. " +
+                "Browse the game's Trophy Room to sync past wins.";
 
             // The screen reader is just a second producer of the same frames the server ingests.
             var raceNames = _db.GetCareerRaces().Select(r => (r.RaceId, r.Name))
                 .Concat(_db.GetTrophyRaces().Select(t => (t.RaceId, t.Name)));
+            var matcher = new RaceNameMatcher(raceNames);
             _screenReader = new ScreenReaderService(
-                new RaceResultScreenInterpreter(new RaceNameMatcher(raceNames)),
+                new RaceResultScreenInterpreter(matcher),
+                new TrophyRoomScreenInterpreter(matcher),
                 OnFrame,
                 status => _dispatcher.InvokeAsync(() => CaptureStatus = status));
             _screenReader.Start();
@@ -144,6 +152,10 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
                     }
                 }
                 HookActivity = $"race_results: {results.Results.Count} race(s), {newWins} new win(s).";
+                if (newWins > 0)
+                {
+                    _wonStore?.Save(_wonRaceIds);
+                }
                 Recompute();
                 break;
 
