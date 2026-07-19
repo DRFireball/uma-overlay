@@ -52,7 +52,7 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
         private set => Set(ref _masterDbPath, value);
     }
 
-    private string _hookActivity = "No frames received yet.";
+    private string _hookActivity = "WebSocket (ws://localhost:8974): no frames yet — optional, the screen reader works without it.";
     public string HookActivity
     {
         get => _hookActivity;
@@ -107,7 +107,7 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
 
             _server = new LiveStateServer(ListenPort, OnFrame);
             _server.Start();
-            Status = $"Listening on ws://localhost:{ListenPort} — waiting for the game hook.";
+            Status = $"Ready — {TotalTrophies} trophy races loaded. Win a race and it leaves this list.";
 
             // The screen reader is just a second producer of the same frames the server ingests.
             var raceNames = _db.GetCareerRaces().Select(r => (r.RaceId, r.Name))
