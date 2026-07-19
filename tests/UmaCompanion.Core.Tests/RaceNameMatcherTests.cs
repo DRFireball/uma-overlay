@@ -78,11 +78,16 @@ public class RaceNameMatcherTests
     [InlineData("Musashino S.", 2001, "Musashino Stakes")]
     [InlineData("Challenge C.", 2002, "Challenge Cup")]
     [InlineData("Sparking Lady Cup", 2003, "Sparking Lady Cup")] // full form still matches
+    [InlineData("Mile Ch.", 2004, "Mile Championship")]
+    [InlineData("Hanshin J.F.", 2005, "Hanshin Juvenile Fillies")]
+    [InlineData("Asahi Hai F.S.", 2006, "Asahi Hai Futurity Stakes")]
     public void FindBest_TrophyRoomAbbreviations_MatchFullNames(string label, int expectedId, string name)
     {
         var matcher = new RaceNameMatcher(new[]
         {
             (2001, "Musashino Stakes"), (2002, "Challenge Cup"), (2003, "Sparking Lady Cup"),
+            (2004, "Mile Championship"), (2005, "Hanshin Juvenile Fillies"),
+            (2006, "Asahi Hai Futurity Stakes"),
         });
 
         var match = matcher.FindBest(label);
@@ -90,6 +95,34 @@ public class RaceNameMatcherTests
         Assert.NotNull(match);
         Assert.Equal(expectedId, match.RaceId);
         Assert.Equal(name, match.Name);
+    }
+
+    [Fact]
+    public void FindBest_DuplicateNames_PreferTheLowestRaceId()
+    {
+        // master.mdb repeats names for legend-race variants; the career race is the low id.
+        var matcher = new RaceNameMatcher(new[] { (5920, "Japan Cup"), (1019, "Japan Cup") });
+
+        var match = matcher.FindBest("Japan Cup");
+
+        Assert.NotNull(match);
+        Assert.Equal(1019, match.RaceId);
+    }
+
+    [Fact]
+    public void FindBest_AbbreviatedMasterDuplicate_LosesToTheFullCareerName()
+    {
+        // master.mdb has BOTH "Asahi Hai Futurity Stakes" (career, 1022) and a variant literally
+        // named "Asahi Hai F.S." (5960). The trophy label must resolve to the career race.
+        var matcher = new RaceNameMatcher(new[]
+        {
+            (5960, "Asahi Hai F.S."), (1022, "Asahi Hai Futurity Stakes"),
+        });
+
+        var match = matcher.FindBest("Asahi Hai F.S.");
+
+        Assert.NotNull(match);
+        Assert.Equal(1022, match.RaceId);
     }
 
     [Fact]

@@ -2,17 +2,18 @@ namespace UmaCompanion.Core.Reading;
 
 /// <summary>
 /// Reads the game's Trophy Room pages. Every trophy slot — owned or not — shows its race name,
-/// so text alone cannot tell a win from a gap: owned trophies are bright art, unowned ones a
-/// near-black silhouette (measured on real captures: owned ≥ 104 mean luminance, silhouettes
-/// ≤ 53, bare shelf ≈ 71). Each matched label is therefore confirmed by probing the brightness
-/// of the art region above it. Interpretation is also gated on the screen actually BEING the
-/// trophy room — race pickers and calendars list races the player has NOT won, and must never
-/// match.
+/// so text alone cannot tell a win from a gap: owned trophies are bright, spot-lit art, unowned
+/// ones a near-black unlit silhouette. Each matched label is confirmed by probing the brightness
+/// of the art region above it; the region reaches high enough to include the spotlight glow, so
+/// even dark trophy art (the Tenno Sho (Autumn) plaque) reads bright. Measured on real captures:
+/// silhouettes ≤ 48, darkest owned art 84, typical owned ≥ 90 — threshold 70. Interpretation is
+/// also gated on the screen actually BEING the trophy room — race pickers and calendars list
+/// races the player has NOT won, and must never match.
 /// </summary>
 public sealed class TrophyRoomScreenInterpreter
 {
     /// <summary>Mean luminance above which the art region counts as an owned trophy.</summary>
-    public const double OwnedBrightnessThreshold = 80;
+    public const double OwnedBrightnessThreshold = 70;
 
     // Screen-title markers that identify the trophy room, normalized. One OCR error tolerated.
     private static readonly string[] Markers = { "trophyroom", "trophies" };
@@ -100,16 +101,19 @@ public sealed class TrophyRoomScreenInterpreter
     }
 
     /// <summary>
-    /// The trophy-art region above a label: a square of ~3 text-heights, centered, ending one
-    /// text-height above the label — the middle of the trophy (or silhouette) art.
+    /// The trophy-art region above a label: 3 text-heights wide and 5 tall, centered, ending one
+    /// text-height above the label. Tall enough to span the art AND its spotlight glow, so dark
+    /// trophy art still probes bright, while silhouette slots (never lit) stay dark. Stays well
+    /// short of the shelf above (~10 text-heights up).
     /// </summary>
     private static OcrRect ProbeRegionAbove(OcrRect label, double unitHeight)
     {
-        var side = 3 * unitHeight;
+        var width = 3 * unitHeight;
+        var height = 5 * unitHeight;
         return new OcrRect(
-            label.X + label.Width / 2 - side / 2,
-            label.Y - unitHeight - side,
-            side,
-            side);
+            label.X + label.Width / 2 - width / 2,
+            label.Y - unitHeight - height,
+            width,
+            height);
     }
 }

@@ -66,6 +66,57 @@ public class TrophyRoomFixtureTests
         }
     }
 
+    // The G1 page fixture: 15 owned trophies, no silhouettes, and the hard cases — the dark
+    // Tenno Sho (Autumn) plaque, "Mile Ch."/"Hanshin J.F."/"Asahi Hai F.S." abbreviations, a
+    // wrapped "Queen Elizabeth II / Cup", and master.mdb duplicate-name decoys.
+    private static readonly (int Id, string Name)[] G1Races =
+    {
+        (1016, "Tenno Sho (Autumn)"),
+        (1017, "Queen Elizabeth II Cup"),
+        (1018, "Mile Championship"),
+        (1019, "Japan Cup"),
+        (1020, "Champions Cup"),
+        (1021, "Hanshin Juvenile Fillies"),
+        (1022, "Asahi Hai Futurity Stakes"),
+        (1023, "Arima Kinen"),
+        (1024, "Hopeful Stakes"),
+        (1101, "Teio Sho"),
+        (1102, "Japan Dirt Derby"),
+        (1103, "JBC Ladies' Classic"),
+        (1104, "JBC Sprint"),
+        (1105, "JBC Classic"),
+        (1106, "Tokyo Daishoten"),
+        // Real master.mdb duplicates that must NOT win over the career ids above.
+        (5920, "Japan Cup"),
+        (5960, "Asahi Hai F.S."),
+    };
+
+    [SkippableFact]
+    public async Task RealG1Capture_FindsAllFifteenOwnedTrophies_UnderCareerIds()
+    {
+        var reader = WindowsOcrReader.TryCreate();
+        Skip.If(reader is null, "no Windows OCR language pack installed");
+
+        using var bitmap = await LoadFixtureAsync("trophy-room-g1.png");
+        var lines = await reader!.ReadAsync(bitmap);
+
+        var interpreter = new TrophyRoomScreenInterpreter(new RaceNameMatcher(
+            G1Races.Select(r => (r.Id, r.Name))));
+        var owned = interpreter.OwnedRaceIds(
+            lines, region => BitmapBrightnessProbe.MeanLuminance(bitmap, region));
+
+        foreach (var id in new[]
+        {
+            1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1101, 1102, 1103, 1104, 1105, 1106,
+        })
+        {
+            Assert.Contains(id, owned);
+        }
+        // The duplicate-name decoys must have lost to the career ids.
+        Assert.DoesNotContain(5920, owned);
+        Assert.DoesNotContain(5960, owned);
+    }
+
     private static async Task<SoftwareBitmap> LoadFixtureAsync(string name)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "fixtures", name);

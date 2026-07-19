@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="..\fixtures\trophy-room-g3.png" Link="fixtures\trophy-room-g3.png"
+    <Content Include="..\fixtures\trophy-room-*.png" LinkBase="fixtures"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

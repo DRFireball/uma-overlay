@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace UmaCompanion.Core.Reading;
 
@@ -11,16 +10,21 @@ public sealed record RaceNameMatch(int RaceId, string Name, int Distance);
 /// Matches noisy OCR text against the known race names from master.mdb. OCR output routinely
 /// mangles a character or two and surrounds the name with other screen text, so matching is
 /// fuzzy (bounded edit distance) and substring-based (the name may appear anywhere in the line).
-/// Each race also matches under the game's label abbreviations ("Musashino S." for
-/// "Musashino Stakes", "Challenge C." for "Challenge Cup"), as used in the Trophy Room.
+/// Each race also matches under the game's label abbreviations as used in the Trophy Room —
+/// "Musashino S.", "Champions C.", "Mile Ch.", "Hanshin J.F.", "Asahi Hai F.S.".
 /// </summary>
-public sealed partial class RaceNameMatcher
+public sealed class RaceNameMatcher
 {
-    [GeneratedRegex(@"\bStakes\b", RegexOptions.IgnoreCase)]
-    private static partial Regex StakesWord();
-
-    [GeneratedRegex(@"\bCup\b", RegexOptions.IgnoreCase)]
-    private static partial Regex CupWord();
+    // Words the game's trophy labels abbreviate, observed on real Trophy Room captures.
+    private static readonly Dictionary<string, string> WordAbbreviations = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Stakes"] = "S",
+        ["Cup"] = "C",
+        ["Championship"] = "Ch",
+        ["Juvenile"] = "J",
+        ["Fillies"] = "F",
+        ["Futurity"] = "F",
+    };
 
     private readonly List<(int RaceId, string Name, string[] Patterns)> _races;
 
@@ -42,7 +46,9 @@ public sealed partial class RaceNameMatcher
         {
             return Array.Empty<string>();
         }
-        var abbreviated = Normalize(CupWord().Replace(StakesWord().Replace(name, "S"), "C"));
+        var abbreviated = Normalize(string.Join(' ',
+            name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Select(word => WordAbbreviations.GetValueOrDefault(word, word))));
         return abbreviated == full ? new[] { full } : new[] { full, abbreviated };
     }
 
@@ -72,9 +78,12 @@ public sealed partial class RaceNameMatcher
                 }
                 // Prefer the closest match; on equal distance the longer (more specific) name
                 // wins — "Tokyo Yushun (Japanese Derby)" must beat a shorter embedded name.
+                // On a full tie take the LOWEST race id: master.mdb repeats names for legend-race
+                // variants (Japan Cup = 1019 and 5920…), and the career race is the low id.
                 if (best is null
                     || distance < best.Distance
-                    || (distance == best.Distance && name.Length > best.Name.Length))
+                    || (distance == best.Distance && name.Length > best.Name.Length)
+                    || (distance == best.Distance && name.Length == best.Name.Length && raceId < best.RaceId))
                 {
                     best = new RaceNameMatch(raceId, name, distance);
                 }
