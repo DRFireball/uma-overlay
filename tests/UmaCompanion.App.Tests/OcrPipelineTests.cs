@@ -23,7 +23,8 @@ public class OcrPipelineTests
         var reader = WindowsOcrReader.TryCreate();
         Skip.If(reader is null, "no Windows OCR language pack installed");
 
-        using var rendered = RenderResultScreen("Japan Cup", "1st");
+        using var rendered = RenderResultScreen(
+            "Japan Cup", "1st", "Tokyo Turf 2400m (Long) Left / Outer");
         using var bitmap = await ToSoftwareBitmapAsync(rendered);
 
         var lines = await reader!.ReadLinesAsync(bitmap);
@@ -38,13 +39,18 @@ public class OcrPipelineTests
         Assert.True(result.Won);
     }
 
-    [SkippableFact]
-    public async Task RenderedNonResultScreen_ThroughRealOcr_YieldsNothing()
+    [SkippableTheory]
+    // No banner at all — whatever this screen is, it is not a result.
+    [InlineData("Training", "Rest", null)]
+    // A real race name and a real placement, but still no banner: the gate alone rejects it.
+    [InlineData("Japan Cup", "1st", null)]
+    public async Task RenderedNonResultScreen_ThroughRealOcr_YieldsNothing(
+        string title, string placement, string? banner)
     {
         var reader = WindowsOcrReader.TryCreate();
         Skip.If(reader is null, "no Windows OCR language pack installed");
 
-        using var rendered = RenderResultScreen("Training", "Rest");
+        using var rendered = RenderResultScreen(title, placement, banner);
         using var bitmap = await ToSoftwareBitmapAsync(rendered);
 
         var lines = await reader!.ReadLinesAsync(bitmap);
@@ -54,16 +60,26 @@ public class OcrPipelineTests
         Assert.Null(interpreter.Interpret(lines));
     }
 
-    /// <summary>Big black-on-white text, comfortably OCR-readable.</summary>
-    private static Bitmap RenderResultScreen(string title, string placement)
+    /// <summary>
+    /// Big black-on-white text, comfortably OCR-readable, laid out like the real screen: the
+    /// placement badge on top, then the race-name pill, then the condition banner directly under
+    /// it. The banner is what identifies the screen as a result at all — a render without one is
+    /// the negative case.
+    /// </summary>
+    private static Bitmap RenderResultScreen(string title, string placement, string? banner = null)
     {
-        var bmp = new Bitmap(900, 400);
+        var bmp = new Bitmap(1100, 400);
         using var g = Graphics.FromImage(bmp);
         g.Clear(Color.White);
         using var titleFont = new Font("Segoe UI", 48, System.Drawing.FontStyle.Bold);
         using var placeFont = new Font("Segoe UI", 40);
-        g.DrawString(title, titleFont, Brushes.Black, 40, 60);
-        g.DrawString(placement, placeFont, Brushes.Black, 40, 220);
+        using var bannerFont = new Font("Segoe UI", 26);
+        g.DrawString(placement, placeFont, Brushes.Black, 40, 40);
+        g.DrawString(title, titleFont, Brushes.Black, 40, 150);
+        if (banner is not null)
+        {
+            g.DrawString(banner, bannerFont, Brushes.Black, 40, 270);
+        }
         return bmp;
     }
 

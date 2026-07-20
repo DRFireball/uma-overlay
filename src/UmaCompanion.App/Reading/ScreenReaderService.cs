@@ -10,6 +10,10 @@ namespace UmaCompanion.App.Reading;
 /// the Core interpreters over the text. Recognised game state is emitted as the same
 /// <see cref="GameFrame"/>s the WebSocket ingest produces, so downstream consumers cannot tell
 /// the two sources apart. Emits each distinct result once per continuous on-screen appearance.
+///
+/// Only two screens are ever interpreted — the Trophy Room and the race result screen — and each
+/// must positively identify itself first. Everything else the player passes through is dropped
+/// unread, because a fuzzy matcher let loose on arbitrary frames finds races that aren't there.
 /// </summary>
 public sealed class ScreenReaderService : IDisposable
 {
@@ -146,7 +150,16 @@ public sealed class ScreenReaderService : IDisposable
             }
             _trophyConfirmer.BreakStreak();
 
+            // Two screens are read, and no others. OCR still runs on every frame — that is how we
+            // know WHICH screen is up — but a frame that identifies as neither the Trophy Room nor
+            // the result screen is discarded here rather than picked over for anything race-shaped.
             var texts = lines.Select(l => l.Text).ToList();
+            if (!RaceResultScreenInterpreter.IsRaceResultScreen(texts))
+            {
+                _lastEmitted = null;
+                return;
+            }
+
             var result = _resultInterpreter.Interpret(texts);
             if (result is null)
             {
