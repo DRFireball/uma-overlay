@@ -25,6 +25,10 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly HashSet<int> _wonRaceIds = new();
 
+    // Race id -> display info, so a recorded win id can be shown as a name even when the race is
+    // no longer in the missing list. Populated once from master.mdb in Start().
+    private readonly Dictionary<int, (string Name, string Grade)> _raceLookup = new();
+
     private MasterDb? _db;
     private TrophyPlanner? _planner;
     private LiveStateServer? _server;
@@ -38,6 +42,41 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>The current missing-trophy schedule, one row per career turn slot.</summary>
     public ObservableCollection<ScheduleRow> Schedule { get; } = new();
+
+    /// <summary>Every race recorded as won, newest sync order irrelevant — sorted by name.</summary>
+    public ObservableCollection<WonRow> Won { get; } = new();
+
+    private bool _showWon;
+
+    /// <summary>Which tab is selected. The two lists share the same grid cell.</summary>
+    public bool ShowWon
+    {
+        get => _showWon;
+        private set
+        {
+            if (!Set(ref _showWon, value))
+            {
+                return;
+            }
+            Raise(nameof(MissingListVisibility));
+            Raise(nameof(WonListVisibility));
+            Raise(nameof(MissingTabBackground));
+            Raise(nameof(WonTabBackground));
+        }
+    }
+
+    public Visibility MissingListVisibility => _showWon ? Visibility.Collapsed : Visibility.Visible;
+    public Visibility WonListVisibility => _showWon ? Visibility.Visible : Visibility.Collapsed;
+
+    // Selected tab reads as a raised surface; the other blends into the window.
+    public string MissingTabBackground => _showWon ? "#FF20232C" : "#FF313747";
+    public string WonTabBackground => _showWon ? "#FF313747" : "#FF20232C";
+
+    public string MissingTabLabel => $"Missing ({MissingCount})";
+    public string WonTabLabel => $"Won ({WonCount})";
+
+    public void ShowMissingTab() => ShowWon = false;
+    public void ShowWonTab() => ShowWon = true;
 
     private string _status = "Starting…";
     public string Status
@@ -71,7 +110,13 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
     public int MissingCount
     {
         get => _missingCount;
-        private set => Set(ref _missingCount, value);
+        private set
+        {
+            if (Set(ref _missingCount, value))
+            {
+                Raise(nameof(MissingTabLabel));
+            }
+        }
     }
 
     private int _totalTrophies;
@@ -85,7 +130,13 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
     public int WonCount
     {
         get => _wonCount;
-        private set => Set(ref _wonCount, value);
+        private set
+        {
+            if (Set(ref _wonCount, value))
+            {
+                Raise(nameof(WonTabLabel));
+            }
+        }
     }
 
     /// <summary>Locates master.mdb, loads the trophy reference data, and starts the live server.</summary>
@@ -104,6 +155,16 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
             _planner = TrophyPlanner.FromMasterDb(_db);
             MasterDbPath = path;
             TotalTrophies = _planner.MissingTrophies(Array.Empty<int>()).Count;
+
+            // Career races first so a trophy entry's (canonical) name wins any id collision.
+            foreach (var race in _db.GetCareerRaces())
+            {
+                _raceLookup[race.RaceId] = (race.Name, race.Grade.ToString());
+            }
+            foreach (var trophy in _db.GetTrophyRaces())
+            {
+                _raceLookup[trophy.RaceId] = (trophy.Name, trophy.Grade.ToString());
+            }
 
             // Wins persist across sessions (result screens + Trophy Room sync both land here).
             _wonStore = WonRaceStore.CreateDefault();
@@ -180,6 +241,18 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
         {
             Schedule.Add(ScheduleRow.From(scheduled));
         }
+
+        // An id with no lookup entry is still worth showing — it means a detection landed on a
+        // race outside the trophy set, which is exactly what we'd want to see while debugging.
+        Won.Clear();
+        foreach (var row in _wonRaceIds
+            .Select(id => _raceLookup.TryGetValue(id, out var info)
+                ? new WonRow(id, info.Name, info.Grade)
+                : new WonRow(id, $"(unknown race {id})", "—"))
+            .OrderBy(r => r.Race, StringComparer.OrdinalIgnoreCase))
+        {
+            Won.Add(row);
+        }
     }
 
     /// <summary>
@@ -204,15 +277,34 @@ public sealed class CompanionViewModel : INotifyPropertyChanged, IDisposable
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
         {
-            return;
+            return false;
         }
         field = value;
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        return true;
     }
+
+    private void Raise(string name)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// <summary>A race recorded as won, as shown on the Won tab.</summary>
+public sealed class WonRow
+{
+    public WonRow(int raceId, string race, string grade)
+    {
+        RaceId = raceId;
+        Race = race;
+        Grade = grade;
+    }
+
+    public int RaceId { get; }
+    public string Race { get; }
+    public string Grade { get; }
 }
 
 /// <summary>A single row in the missing-trophy schedule, pre-formatted for display.</summary>

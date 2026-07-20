@@ -8,10 +8,31 @@
             <Setter Property="Foreground" Value="#FFE6E8EF" />
             <Setter Property="FontFamily" Value="Segoe UI" />
         </Style>
+
+        <!-- Flat tab; the selected one is painted by the view model (see MissingTabBackground). -->
+        <Style x:Key="TabButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#FFE6E8EF" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="16,7" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6,6,0,0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -53,8 +74,16 @@
                 ToolTip="Clear every recorded win (asks first). Re-browse the Trophy Room to re-sync." />
         </Grid>
 
-        <!-- Schedule table -->
-        <ListView Grid.Row="2" ItemsSource="{Binding Schedule}"
+        <!-- Tab bar: the two lists below share one cell, toggled by visibility -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal">
+            <Button Content="{Binding MissingTabLabel}" Click="OnShowMissing"
+                    Style="{StaticResource TabButton}" Background="{Binding MissingTabBackground}" />
+            <Button Content="{Binding WonTabLabel}" Click="OnShowWon"
+                    Style="{StaticResource TabButton}" Background="{Binding WonTabBackground}" />
+        </StackPanel>
+
+        <!-- Missing schedule table -->
+        <ListView Grid.Row="3" ItemsSource="{Binding Schedule}" Visibility="{Binding MissingListVisibility}"
                   Background="#FF20232C" BorderBrush="#FF31353F" Foreground="#FFE6E8EF">
             <ListView.View>
                 <GridView>
@@ -66,8 +95,20 @@
             </ListView.View>
         </ListView>
 
+        <!-- Won table -->
+        <ListView Grid.Row="3" ItemsSource="{Binding Won}" Visibility="{Binding WonListVisibility}"
+                  Background="#FF20232C" BorderBrush="#FF31353F" Foreground="#FFE6E8EF">
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn Header="Race" Width="400" DisplayMemberBinding="{Binding Race}" />
+                    <GridViewColumn Header="Grade" Width="80" DisplayMemberBinding="{Binding Grade}" />
+                    <GridViewColumn Header="Race ID" Width="100" DisplayMemberBinding="{Binding RaceId}" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+
         <!-- Footer -->
-        <StackPanel Grid.Row="3" Margin="0,10,0,0">
+        <StackPanel Grid.Row="4" Margin="0,10,0,0">
             <TextBlock Text="{Binding CaptureStatus}" Foreground="#FF9AA3B2" />
             <TextBlock Text="{Binding HookActivity}" Foreground="#FF9AA3B2" Margin="0,2,0,0" />
             <TextBlock Text="{Binding MasterDbPath}" Foreground="#FF6B7280" FontSize="11" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" />

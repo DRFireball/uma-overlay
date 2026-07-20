@@ -41,7 +41,7 @@ public class G2MatcherCoverageTest
             var candidates = lines.Select(l => l.Text)
                 .Concat(lines.Zip(lines.Skip(1), (a, b) => a.Text + " " + b.Text));
             var found = candidates
-                .Select(matcher.FindBest)
+                .Select(c => matcher.FindBest(c))
                 .Where(m => m is not null)
                 .Select(m => m!.RaceId)
                 .ToHashSet();

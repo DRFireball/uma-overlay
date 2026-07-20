@@ -65,6 +65,19 @@ public class RaceResultScreenInterpreterTests
     }
 
     [Fact]
+    public void Interpret_EventNameResemblingAbbreviatedTrophy_IsNotAResult()
+    {
+        // "Champions Meeting" (a PvP event on the home screen) resembles the "Champions C." trophy
+        // label, but the result screen uses full names — it must not register as Champions Cup.
+        var interpreter = new RaceResultScreenInterpreter(new RaceNameMatcher(new[]
+        {
+            (1020, "Champions Cup"), (1013, "Japan Cup"),
+        }));
+
+        Assert.Null(interpreter.Interpret(new[] { "Champions Meeting", "1st" }));
+    }
+
+    [Fact]
     public void Interpret_UnknownCharacter_ReportsCharaIdZero()
     {
         var result = BuildInterpreter().Interpret(new[] { "Japan Cup", "1st" });

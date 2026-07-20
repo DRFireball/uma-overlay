@@ -31,7 +31,9 @@ public sealed class RaceNameMatcher
     // The two-char "St." of "St. Lite Kinen" is not a single-letter initial, so real names survive.
     private static readonly Regex InitialsOnlyToken = new(@"^([A-Za-z]\.)+$", RegexOptions.Compiled);
 
-    private readonly List<(int RaceId, string Name, string[] Patterns)> _races;
+    // Canonical = the full name plus any parenthetical alias (real display forms, on every screen).
+    // Abbreviated = the trophy-label prefix truncations, which appear ONLY in the Trophy Room.
+    private readonly List<(int RaceId, string Name, string[] Canonical, string[] Abbreviated)> _races;
 
     public RaceNameMatcher(IEnumerable<(int RaceId, string Name)> races)
     {
@@ -39,8 +41,12 @@ public sealed class RaceNameMatcher
             .GroupBy(r => r.RaceId)
             .Select(g => g.First())
             .Where(r => !IsAbbreviationName(r.Name))
-            .Select(r => (r.RaceId, r.Name, BuildPatterns(r.Name)))
-            .Where(r => r.Item3.Length > 0)
+            .Select(r =>
+            {
+                var (canonical, abbreviated) = BuildPatterns(r.Name);
+                return (r.RaceId, r.Name, canonical, abbreviated);
+            })
+            .Where(r => r.canonical.Length > 0)
             .ToList();
     }
 
@@ -52,20 +58,22 @@ public sealed class RaceNameMatcher
     }
 
     /// <summary>
-    /// The full normalized name plus every trophy-label abbreviation: keep the first i words in
-    /// full and truncate each remaining word to its first 1 or 2 letters, for every split point.
+    /// Builds the canonical patterns (full name + parenthetical alias — real display forms) and,
+    /// separately, the trophy-label abbreviations (first i words kept, the rest truncated to 1-2
+    /// letters, for every split point). Abbreviations are matched only where they occur, the
+    /// Trophy Room, so "Champions Meeting" can't collide with "Champions C." off a result screen.
     /// </summary>
-    private static string[] BuildPatterns(string name)
+    private static (string[] Canonical, string[] Abbreviated) BuildPatterns(string name)
     {
         var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Select(Normalize).Where(w => w.Length > 0).ToArray();
         var full = string.Concat(words);
         if (full.Length == 0)
         {
-            return Array.Empty<string>();
+            return (Array.Empty<string>(), Array.Empty<string>());
         }
 
-        var patterns = new HashSet<string> { full };
+        var canonical = new HashSet<string> { full };
 
         // Parenthetical alias: the game labels "Tokyo Yushun (Japanese Derby)" as just
         // "Japanese Derby". Add the inner text as its own pattern, but only when it is multi-word
@@ -74,26 +82,24 @@ public sealed class RaceNameMatcher
         var alias = Normalize(ParentheticalContent(name, out var innerHasSpace));
         if (innerHasSpace && alias.Length >= MinAbbreviationLength)
         {
-            patterns.Add(alias);
+            canonical.Add(alias);
         }
 
-        if (words.Length >= 2)
+        var abbreviated = new HashSet<string>();
+        for (var i = 1; i < words.Length; i++) // words[0..i) kept full, words[i..] abbreviated
         {
-            for (var i = 1; i < words.Length; i++) // words[0..i) kept full, words[i..] abbreviated
+            var head = string.Concat(words.Take(i));
+            foreach (var prefixLen in new[] { 1, 2 })
             {
-                var head = string.Concat(words.Take(i));
-                foreach (var prefixLen in new[] { 1, 2 })
+                var tail = string.Concat(words.Skip(i).Select(w => w[..Math.Min(prefixLen, w.Length)]));
+                var pattern = head + tail;
+                if (pattern.Length >= MinAbbreviationLength && !canonical.Contains(pattern))
                 {
-                    var tail = string.Concat(words.Skip(i).Select(w => w[..Math.Min(prefixLen, w.Length)]));
-                    var pattern = head + tail;
-                    if (pattern.Length >= MinAbbreviationLength)
-                    {
-                        patterns.Add(pattern);
-                    }
+                    abbreviated.Add(pattern);
                 }
             }
         }
-        return patterns.ToArray();
+        return (canonical.ToArray(), abbreviated.ToArray());
     }
 
     /// <summary>The text inside the first (…) group, or empty; reports whether it has a space.</summary>
@@ -112,12 +118,14 @@ public sealed class RaceNameMatcher
     }
 
     /// <summary>
-    /// The best race whose name (or abbreviation) approximately appears in
-    /// <paramref name="ocrLine"/>, or null when nothing matches within tolerance. Tolerance
-    /// scales with pattern length (roughly one error per eight characters), so short names must
-    /// match exactly and long names absorb OCR noise.
+    /// The best race whose name approximately appears in <paramref name="ocrLine"/>, or null when
+    /// nothing matches within tolerance. Tolerance scales with pattern length (roughly one error
+    /// per eight characters), so short names must match exactly and long names absorb OCR noise.
+    /// <paramref name="includeAbbreviations"/> adds the Trophy Room's truncated-word forms; leave
+    /// it off for other screens (result, race picker) that show full names, so an event like
+    /// "Champions Meeting" can't collide with the "Champions C." trophy label.
     /// </summary>
-    public RaceNameMatch? FindBest(string ocrLine)
+    public RaceNameMatch? FindBest(string ocrLine, bool includeAbbreviations = true)
     {
         var line = Normalize(ocrLine);
         if (line.Length == 0)
@@ -127,8 +135,9 @@ public sealed class RaceNameMatcher
 
         RaceNameMatch? best = null;
         var bestPatternLength = 0;
-        foreach (var (raceId, name, patterns) in _races)
+        foreach (var (raceId, name, canonical, abbreviated) in _races)
         {
+            var patterns = includeAbbreviations ? canonical.Concat(abbreviated) : canonical;
             foreach (var pattern in patterns)
             {
                 var distance = SubstringEditDistance(pattern, line);

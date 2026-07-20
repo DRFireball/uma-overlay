@@ -100,6 +100,17 @@ public class RaceNameMatcherTests
     }
 
     [Fact]
+    public void FindBest_WithoutAbbreviations_RejectsWordPrefixCollisions()
+    {
+        // "Champions Meeting" matches the "championsc" abbreviation of Champions Cup at d=1, but
+        // full-name matching (used off the Trophy Room) must reject it.
+        var matcher = new RaceNameMatcher(new[] { (1020, "Champions Cup") });
+
+        Assert.Equal(1020, matcher.FindBest("Champions Meeting", includeAbbreviations: true)!.RaceId);
+        Assert.Null(matcher.FindBest("Champions Meeting", includeAbbreviations: false));
+    }
+
+    [Fact]
     public void FindBest_ShortFullNameShownInFull_DoesNotAbbreviate()
     {
         // "Oka Sho" is short enough to always display in full; its initials must not become a

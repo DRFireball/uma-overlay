@@ -10,6 +10,12 @@ public partial class MainWindow : Window
         InitializeComponent();
     }
 
+    private void OnShowMissing(object sender, RoutedEventArgs e)
+        => (DataContext as CompanionViewModel)?.ShowMissingTab();
+
+    private void OnShowWon(object sender, RoutedEventArgs e)
+        => (DataContext as CompanionViewModel)?.ShowWonTab();
+
     private void OnResetWins(object sender, RoutedEventArgs e)
     {
         if (DataContext is not CompanionViewModel viewModel)

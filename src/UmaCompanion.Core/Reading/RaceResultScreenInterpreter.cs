@@ -36,8 +36,10 @@ public sealed partial class RaceResultScreenInterpreter
         foreach (var line in ocrLines)
         {
             // Keep the closest race match across ALL lines: a later exact match must beat an
-            // earlier line that only fuzzily resembled some other race.
-            var candidate = _matcher.FindBest(line);
+            // earlier line that only fuzzily resembled some other race. Full names only — the
+            // result screen never shows the Trophy Room's abbreviations, and matching them here
+            // lets home/event screens ("Champions Meeting") masquerade as a race.
+            var candidate = _matcher.FindBest(line, includeAbbreviations: false);
             if (candidate is not null && (race is null || candidate.Distance < race.Distance))
             {
                 race = candidate;
