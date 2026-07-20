@@ -27,8 +27,25 @@ public class TrophyRoomFixtureTests
     private static readonly int[] G1Page2OwnedIds =
         { 1016, 1017, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1101, 1102, 1103, 1104, 1105, 1106 };
 
+    // Both G2 pages are fully owned. Between them they carry every label form that has broken the
+    // matcher: single-letter abbreviations (Rose S., Fuji S., Tokai S.), a sponsor prefix absent
+    // from master.mdb (Yomiuri Milers C. -> "Milers Cup"), an apostrophe (Fillies' Revue), a
+    // wrapped two-line name (Hanshin Umamusume S.) and a label OCR mangles into a near-miss of a
+    // DIFFERENT race ("Kyoto Kinen" -> "Kyoto-Kineri", one edit from Kyoto Kimpai's abbreviation).
+    private static readonly int[] G2Page2OwnedIds =
+        { 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 3018 };
+
+    private static readonly int[] G2Page3OwnedIds =
+        { 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 3058 };
+
     [SkippableFact]
     public Task G3Page_ExactOwnedSet() => AssertExactOwned("trophy-room-g3.png", G3OwnedIds);
+
+    [SkippableFact]
+    public Task G2Page2_ExactOwnedSet() => AssertExactOwned("trophy-room-g2-page2.png", G2Page2OwnedIds);
+
+    [SkippableFact]
+    public Task G2Page3_ExactOwnedSet() => AssertExactOwned("trophy-room-g2-page3.png", G2Page3OwnedIds);
 
     [SkippableFact]
     public Task G1Page1_ExactOwnedSet() => AssertExactOwned("trophy-room-g1-page1.png", G1Page1OwnedIds);

@@ -19,11 +19,15 @@ public sealed record RaceNameMatch(int RaceId, string Name, int Distance);
 /// </summary>
 public sealed class RaceNameMatcher
 {
-    // Abbreviated patterns below this length match as substrings inside unrelated labels ("milec"
-    // landing inside "nhkmilec"), so over-abbreviated forms are dropped. This alone also keeps
-    // truly short names out (Oka Sho -> "okas"/"okash" are both too short), so names that the game
-    // always shows in full contribute no loose prefix patterns.
-    private const int MinAbbreviationLength = 6;
+    // Floor on abbreviated pattern length. Five, not six: the game abbreviates a trailing word to a
+    // SINGLE letter ("Rose Stakes" -> "Rose S." -> "roses", "Fuji S." -> "fujis"), and a six-char
+    // floor silently dropped every such label. Anything this short is still safe because
+    // abbreviations must match at the END of the label (see SuffixEditDistance).
+    private const int MinAbbreviationLength = 5;
+
+    // The parenthetical alias is a full display name, not an abbreviation, and is matched anywhere
+    // in a line — so it keeps the stricter floor.
+    private const int MinAliasLength = 6;
 
     // A final token that is a pure run of single-letter initials ("S.", "F.S.", "J.F."). master.mdb
     // carries junk legend-race duplicates whose whole NAME is the trophy abbreviation ("Hanshin
@@ -80,7 +84,7 @@ public sealed class RaceNameMatcher
         // — a single-word qualifier like "(Spring)"/"(Autumn)" would collide across variants and
         // is disambiguated by the full name instead.
         var alias = Normalize(ParentheticalContent(name, out var innerHasSpace));
-        if (innerHasSpace && alias.Length >= MinAbbreviationLength)
+        if (innerHasSpace && alias.Length >= MinAliasLength)
         {
             canonical.Add(alias);
         }
@@ -137,10 +141,23 @@ public sealed class RaceNameMatcher
         var bestPatternLength = 0;
         foreach (var (raceId, name, canonical, abbreviated) in _races)
         {
-            var patterns = includeAbbreviations ? canonical.Concat(abbreviated) : canonical;
-            foreach (var pattern in patterns)
+            // Canonical names may sit anywhere in a line (surrounded by grade chips, distances,
+            // commentary). Abbreviations may not: the game builds them by truncating the tail of
+            // the name, so the pattern always runs to the END of the label. Anchoring them there
+            // is what stops one race's abbreviation from landing mid-way through another's label —
+            // "Kyoto Ki(mpai)" sitting inside a smudged "Kyoto Kineri" and beating Kyoto Kinen's
+            // own near-exact full name on distance alone.
+            var patterns = canonical.Select(p => (Pattern: p, Anchored: false));
+            if (includeAbbreviations)
             {
-                var distance = SubstringEditDistance(pattern, line);
+                patterns = patterns.Concat(abbreviated.Select(p => (Pattern: p, Anchored: true)));
+            }
+
+            foreach (var (pattern, anchored) in patterns)
+            {
+                var distance = anchored
+                    ? SuffixEditDistance(pattern, line)
+                    : SubstringEditDistance(pattern, line);
                 if (distance > pattern.Length / 8)
                 {
                     continue;
@@ -192,6 +209,25 @@ public sealed class RaceNameMatcher
     /// skipping text before/after the match is free).
     /// </summary>
     internal static int SubstringEditDistance(string pattern, string text)
+        => Align(pattern, text).Min();
+
+    /// <summary>
+    /// Like <see cref="SubstringEditDistance"/>, but the match must END where the text ends: text
+    /// before the match is free, text after it is not. Trailing
+    /// characters the pattern does not explain are paid for, which is what makes a truncated
+    /// trophy label ("yomiurimilersc" ending in "milersc") match while a smudge that merely
+    /// contains the pattern ("kyotokineri" containing "kyotoki") does not.
+    /// </summary>
+    internal static int SuffixEditDistance(string pattern, string text)
+        => Align(pattern, text)[text.Length];
+
+    /// <summary>
+    /// Semi-global alignment DP. Returns the final row: entry j is the edit distance between
+    /// <paramref name="pattern"/> and the best-matching substring of <paramref name="text"/> that
+    /// ENDS at position j (skipping text before the match is free). Callers choose their anchoring
+    /// by how they read the row — the minimum for a substring match, the last entry for a suffix.
+    /// </summary>
+    private static int[] Align(string pattern, string text)
     {
         var previous = new int[text.Length + 1]; // dp row for pattern prefix i-1; row 0 is all zeros
         var current = new int[text.Length + 1];
@@ -206,6 +242,6 @@ public sealed class RaceNameMatcher
             }
             (previous, current) = (current, previous);
         }
-        return previous.Min();
+        return previous;
     }
 }

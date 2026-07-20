@@ -99,14 +99,74 @@ public class RaceNameMatcherTests
         Assert.Equal(name, match.Name);
     }
 
+    [Theory]
+    [InlineData("Rose S.", 2022, "Rose Stakes")]  // trailing word cut to ONE letter: "roses", 5 chars
+    [InlineData("Fuji S.", 2029, "Fuji Stakes")]
+    public void FindBest_SingleLetterAbbreviations_Match(string label, int expectedId, string name)
+    {
+        // These were dropped wholesale by a six-character floor on abbreviated patterns, so two
+        // real G2 trophies could never be checked off however clearly they were captured.
+        var matcher = new RaceNameMatcher(new[] { (2022, "Rose Stakes"), (2029, "Fuji Stakes") });
+
+        var match = matcher.FindBest(label);
+
+        Assert.NotNull(match);
+        Assert.Equal(expectedId, match.RaceId);
+        Assert.Equal(name, match.Name);
+    }
+
+    [Fact]
+    public void FindBest_AbbreviationMustMatchTheEndOfTheLabel()
+    {
+        // OCR read the "Kyoto Kinen" label as "Kyoto-Kineri". Kyoto Kimpai's abbreviation
+        // ("kyotoki") sits INSIDE that at distance 0 and so beat Kyoto Kinen's own full name at
+        // distance 1 — a G3 trophy appearing on a G2 page. Abbreviations truncate the tail of a
+        // name, so they only ever run to the end of a label; anchoring them there settles it.
+        var matcher = new RaceNameMatcher(new[] { (3001, "Kyoto Kimpai"), (2004, "Kyoto Kinen") });
+
+        var match = matcher.FindBest("Kyoto-Kineri");
+
+        Assert.NotNull(match);
+        Assert.Equal(2004, match.RaceId);
+    }
+
+    [Fact]
+    public void FindBest_AbbreviationAfterASponsorPrefix_StillMatches()
+    {
+        // The room labels this "Yomiuri Milers C." but master.mdb only knows "Milers Cup", so text
+        // BEFORE the abbreviation has to stay free — only trailing text is disqualifying.
+        var matcher = new RaceNameMatcher(new[] { (2014, "Milers Cup") });
+
+        var match = matcher.FindBest("Yomiuri Milers C.");
+
+        Assert.NotNull(match);
+        Assert.Equal(2014, match.RaceId);
+    }
+
+    [Fact]
+    public void SuffixEditDistance_PatternAtTheEnd_IsZero()
+    {
+        Assert.Equal(0, RaceNameMatcher.SuffixEditDistance("milersc", "yomiurimilersc"));
+    }
+
+    [Fact]
+    public void SuffixEditDistance_TrailingTextIsPaidFor()
+    {
+        // Free as a substring, but four unexplained trailing characters as a suffix.
+        Assert.Equal(0, RaceNameMatcher.SubstringEditDistance("kyotoki", "kyotokineri"));
+        Assert.Equal(4, RaceNameMatcher.SuffixEditDistance("kyotoki", "kyotokineri"));
+    }
+
     [Fact]
     public void FindBest_WithoutAbbreviations_RejectsWordPrefixCollisions()
     {
-        // "Champions Meeting" matches the "championsc" abbreviation of Champions Cup at d=1, but
-        // full-name matching (used off the Trophy Room) must reject it.
+        // "Champions Meeting" once matched the "championsc" abbreviation of Champions Cup at d=1.
+        // Suffix anchoring now rejects it even with abbreviations enabled — the label does not end
+        // there — but full-name matching must independently reject it too: that is the guarantee
+        // the result screen relies on, and it must not quietly become a side effect of anchoring.
         var matcher = new RaceNameMatcher(new[] { (1020, "Champions Cup") });
 
-        Assert.Equal(1020, matcher.FindBest("Champions Meeting", includeAbbreviations: true)!.RaceId);
+        Assert.Null(matcher.FindBest("Champions Meeting", includeAbbreviations: true));
         Assert.Null(matcher.FindBest("Champions Meeting", includeAbbreviations: false));
     }
 
