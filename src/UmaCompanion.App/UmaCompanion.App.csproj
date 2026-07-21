@@ -13,10 +13,30 @@
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- BitmapBrightnessProbe reads captured pixels via IMemoryBufferByteAccess. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Shipping identity. The assembly is "UmaCompanion" so the published file people download
+         and pin to their taskbar is UmaCompanion.exe, not UmaCompanion.App.exe. -->
+    <AssemblyName>UmaCompanion</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Product>Uma Companion</Product>
+    <Description>Passive companion for Umamusume: Pretty Derby — missing trophies and race schedule.</Description>
+    <Version>0.1.0</Version>
+    <!-- Publish settings live in Properties/PublishProfiles/win-x64.pubxml, NOT here: a
+         RuntimeIdentifier in the csproj would make every plain `dotnet build` a win-x64 build and
+         break compiling from WSL. -->
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\UmaCompanion.Core\UmaCompanion.Core.csproj" />
   </ItemGroup>
+
+  <!-- The publish profile's DebugType only governs THIS project, so referenced projects still drop
+       their .pdb beside the single-file exe. A release download should be one file. -->
+  <Target Name="RemoveStrayPdbsFromPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <StrayPdb Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(StrayPdb)" />
+  </Target>
 
 </Project>
